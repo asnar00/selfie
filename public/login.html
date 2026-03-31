@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Fieldnote — Login</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#ffc080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+@font-face {
+  font-family: 'Switzer';
+  src: url('https://cdn.fontshare.com/wf/ZALDQTVRB5QDLEJASCHWEYTBMRQWVDHF/HEPIOCUARKGQGJLB2LJ6LIHSXOBE3IRZ/AZPQJ7VJFXBLEYKNABUQVUDYTE7P3CGJ.woff2') format('woff2');
+  font-weight: 400; font-style: normal;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%; width: 100%;
+  background: rgb(255, 192, 128);
+  font-family: 'Switzer', sans-serif;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px;
+}
+.logo { font-size: 32px; line-height: 1; margin-bottom: 16px; }
+.title { font-size: 28px; color: #000; margin-bottom: 32px; }
+.step { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 300px; }
+.step.active { display: flex; }
+input {
+  width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid #000;
+  background: rgba(255,255,255,0.5); font: 400 18px 'Switzer', sans-serif;
+  text-align: center; outline: none; margin-bottom: 16px;
+}
+input::placeholder { color: rgba(0,0,0,0.4); }
+.btn {
+  padding: 14px 36px; border-radius: 16px; border: none;
+  background: #000; color: rgb(255, 192, 128);
+  font: 600 18px/1 'Switzer', sans-serif;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  width: 100%;
+}
+.btn:disabled { opacity: 0.4; }
+.hint { font-size: 14px; color: #000; margin-bottom: 16px; text-align: center; }
+.error { font-size: 14px; color: #c00; margin-bottom: 12px; text-align: center; }
+.name { font-size: 20px; color: #000; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+  <div class="logo">ᕦ(ツ)ᕤ</div>
+  <div class="title">fieldnote</div>
+
+  <!-- Step 1: Phone number -->
+  <div id="step-phone" class="step active">
+    <input id="phone-input" type="tel" placeholder="your phone number" autocomplete="tel">
+    <div id="phone-error" class="error" style="display:none"></div>
+    <button class="btn" onclick="sendCode()">send code</button>
+  </div>
+
+  <!-- Step 2: Enter code -->
+  <div id="step-code" class="step">
+    <div id="greeting" class="name"></div>
+    <div class="hint">we just texted you a 4-digit code — enter it below</div>
+    <input id="code-input" type="number" pattern="[0-9]*" inputmode="numeric" placeholder="0000" maxlength="4">
+    <div id="code-error" class="error" style="display:none"></div>
+    <button class="btn" onclick="verifyCode()">log in</button>
+  </div>
+
+<script>
+let phone = '';
+
+// Pre-fill phone from URL query param
+const params = new URLSearchParams(location.search);
+// If already authenticated, go straight to app
+const existingToken = localStorage.getItem('authToken');
+if (existingToken && !sessionStorage.getItem('loginAttempted')) {
+  sessionStorage.setItem('loginAttempted', '1');
+  fetch('/api/auth/check', { headers: { 'x-auth-token': existingToken } })
+    .then(r => { if (r.ok) location.href = '/'; else sessionStorage.removeItem('loginAttempted'); });
+} else {
+  sessionStorage.removeItem('loginAttempted');
+}
+
+// If phone is in the URL, auto-send the code
+if (params.get('phone')) {
+  phone = params.get('phone');
+  sendCode();
+}
+
+async function sendCode() {
+  const input = document.getElementById('phone-input');
+  const err = document.getElementById('phone-error');
+  if (!phone) phone = input.value.trim();
+  if (!phone) { err.textContent = 'Enter your phone number'; err.style.display = ''; return; }
+  err.style.display = 'none';
+
+  try {
+    const r = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error; err.style.display = ''; return; }
+
+    document.getElementById('greeting').textContent = `hi ${data.name}!`;
+    document.getElementById('step-phone').classList.remove('active');
+    document.getElementById('step-code').classList.add('active');
+    document.getElementById('code-input').focus();
+  } catch (e) {
+    err.textContent = 'Network error — try again'; err.style.display = '';
+  }
+}
+
+async function verifyCode() {
+  const input = document.getElementById('code-input');
+  const err = document.getElementById('code-error');
+  const code = input.value.trim();
+  if (!code || code.length !== 4) { err.textContent = 'Enter the 4-digit code'; err.style.display = ''; return; }
+  err.style.display = 'none';
+
+  try {
+    const r = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code })
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error; err.style.display = ''; return; }
+
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('userName', data.name);
+    document.cookie = 'authToken=' + encodeURIComponent(data.token) + ';path=/;max-age=31536000;samesite=lax';
+    location.href = '/';
+  } catch (e) {
+    err.textContent = 'Network error — try again'; err.style.display = '';
+  }
+}
+
+// Submit on enter
+document.getElementById('phone-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+document.getElementById('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') verifyCode(); });
+</script>
+</body>
+</html>

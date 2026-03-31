@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Selfie</title>
+<title>Fieldnote</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -59,13 +59,34 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 #report-overlay li { margin-bottom: 4px; }
 #report-overlay hr { border: none; border-top: 1px solid rgba(0,0,0,.15); margin: 14px 0; }
 
-/* ---- QR overlay ---- */
-#qr-overlay {
+/* ---- Invite overlay ---- */
+#invite-overlay {
   display: none; position: fixed; inset: 0; z-index: 20000;
-  background: #fff; align-items: center; justify-content: center; flex-direction: column;
+  background: rgb(252, 243, 234);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 60px 20px 40px; font: 15px/1.6 'Switzer', sans-serif; color: #222;
 }
-#qr-overlay.active { display: flex; }
-#qr-overlay img { width: 70vw; max-width: 400px; image-rendering: pixelated; }
+#invite-overlay.active { display: block; }
+#invite-overlay .close-btn {
+  position: fixed; top: max(12px, env(safe-area-inset-top, 12px)); right: 12px; z-index: 20001;
+  padding: 6px 14px; border-radius: 12px; border: none;
+  background: rgba(255, 192, 128, 0.85); color: #000;
+  font: 600 13px/1 'Switzer', sans-serif; cursor: pointer; box-shadow: 0 0 0 1px #000;
+}
+#invite-overlay h1 { font-size: 20px; margin-bottom: 16px; }
+#invite-overlay h2 { font-size: 17px; margin: 6px 0 4px; }
+#invite-overlay input {
+  display: block; width: 100%; padding: 12px 14px; border-radius: 10px; border: 2px solid #000;
+  background: rgba(255,255,255,0.5); font: 400 16px 'Switzer', sans-serif;
+  outline: none; margin-bottom: 10px;
+}
+#invite-overlay .invite-send {
+  width: 100%; padding: 12px; border-radius: 12px; border: none;
+  background: #000; color: rgb(255, 192, 128);
+  font: 600 16px/1 'Switzer', sans-serif; cursor: pointer;
+}
+#invite-overlay ul { list-style: none; padding: 0; }
+#invite-overlay li { padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
 /* ---- Preview card (top of screen) ---- */
 #preview-card {
@@ -87,6 +108,16 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   width: 56px; height: 75px; border-radius: 8px;
   object-fit: cover; cursor: pointer; flex-shrink: 0; background: #333;
 }
+#preview-card .card-play {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255, 192, 128, 0.85); border: none;
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+#preview-card .card-play svg { width: 20px; height: 20px; fill: #000; }
+#preview-card .card-play.playing svg .play-icon { display: none; }
+#preview-card .card-play:not(.playing) svg .stop-icon { display: none; }
 
 /* ---- Video player (lozenge, same as camera inset) ---- */
 #player {
@@ -168,7 +199,11 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   bottom: max(28px, calc(env(safe-area-inset-bottom, 20px) + 8px));
   left: 20px; z-index: 9500;
   width: 40px; height: 40px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  display: none;
 }
+#upload-status.active { display: block; }
 #upload-status circle { fill: none; stroke-width: 3; }
 #upload-status .bg { stroke: rgba(255,255,255,.3); }
 #upload-status .fg {
@@ -187,22 +222,33 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 #upload-status.done .fg, #upload-status.done .count { opacity: 0; }
 #upload-status.done .bg { stroke: rgba(255,255,255,.15); }
 
-/* ---- QR button (bottom right, below report) ---- */
-#qr-btn {
+/* ---- Invite button (bottom right) ---- */
+#invite-btn {
   bottom: max(28px, calc(env(safe-area-inset-bottom, 20px) + 8px));
   right: 20px;
-  width: 36px; height: 36px; padding: 0;
-  border-radius: 50%; text-align: center; font-size: 11px;
 }
 
+/* ---- Mode toggle (left of rec button) ---- */
+#mode-btn {
+  bottom: max(46px, calc(env(safe-area-inset-bottom, 20px) + 26px));
+  right: calc(50% + 56px);
+  width: 36px; height: 36px; padding: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+#mode-btn svg { width: 18px; height: 18px; fill: #000; }
+#mode-btn .mode-video { display: none; }
+#mode-btn.video-mode .mode-video { display: block; }
+#mode-btn.video-mode .mode-audio { display: none; }
+
 /* ---- Map dots ---- */
-.selfie-dot {
+.fn-dot {
   width: 24px; height: 24px; background: #f80;
   border: 3px solid #fff; border-radius: 50%;
   box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: pointer;
   transition: transform .2s, border-width .2s;
 }
-.selfie-dot.selected {
+.fn-dot.selected {
   transform: scale(1.4); border-width: 4px;
   box-shadow: 0 0 0 4px rgba(255,136,0,.4), 0 1px 4px rgba(0,0,0,.4);
 }
@@ -236,10 +282,32 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 </div>
 
 <!-- QR -->
-<button id="qr-btn" class="nav-btn" onclick="document.getElementById('qr-overlay').classList.add('active')">QR</button>
-<div id="qr-overlay" onclick="this.classList.remove('active')">
-  <p style="font:15px/1.4 'Switzer',sans-serif;color:#333;margin-bottom:16px;text-align:center">Scan this QR code to install the app</p>
-  <img src="/qr.png" alt="QR code">
+<button id="mode-btn" class="nav-btn" onclick="toggleMode()">
+  <svg viewBox="0 0 24 24">
+    <g class="mode-audio"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z"/></g>
+    <g class="mode-video"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/></g>
+  </svg>
+</button>
+<button id="invite-btn" class="nav-btn" onclick="openInvite()">invite</button>
+<div id="invite-overlay">
+  <button class="close-btn" onclick="closeInvite()">close</button>
+  <h1>Invite</h1>
+  <div id="invite-form">
+    <input id="invite-name" type="text" placeholder="Name">
+    <input id="invite-phone" type="tel" placeholder="Phone number">
+    <button class="invite-send" onclick="sendInvite()">add &amp; show QR</button>
+    <div id="invite-error" style="color:#c00;font-size:14px;margin-top:8px;display:none"></div>
+  </div>
+  <div id="invite-qr" style="display:none;text-align:center;margin-top:24px">
+    <p id="invite-qr-name" style="font-size:18px;margin-bottom:16px"></p>
+    <p id="invite-sms-status" style="font-size:14px;margin-bottom:12px"></p>
+    <canvas id="invite-qr-canvas" style="width:70vw;max-width:300px;image-rendering:pixelated"></canvas>
+    <p style="font-size:13px;margin-top:12px;opacity:0.6">or scan to join</p>
+  </div>
+  <div id="invite-list" style="margin-top:32px">
+    <h2 style="font-size:16px;margin-bottom:8px">Team</h2>
+    <ul id="invite-members"></ul>
+  </div>
 </div>
 
 <!-- Map -->
@@ -249,6 +317,10 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 <div id="preview-card">
   <div class="card-text"></div>
   <img class="card-thumb">
+  <button class="card-play" style="display:none">
+    <svg viewBox="0 0 24 24"><polygon class="play-icon" points="6,3 20,12 6,21"/><rect class="stop-icon" x="5" y="5" width="14" height="14" rx="2"/></svg>
+  </button>
+  <audio id="card-audio" preload="none"></audio>
 </div>
 
 <!-- Video player -->
@@ -280,6 +352,123 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// ==================== CLIENT LOGGING ====================
+const _origLog = console.log.bind(console);
+const _origError = console.error.bind(console);
+const _origWarn = console.warn.bind(console);
+const _logBuffer = [];
+
+function _bufferLog(level, args) {
+  const msg = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  _logBuffer.push({ level, msg, t: Date.now() });
+}
+
+console.log = function() { _origLog.apply(null, arguments); _bufferLog('log', arguments); };
+console.error = function() { _origError.apply(null, arguments); _bufferLog('error', arguments); };
+console.warn = function() { _origWarn.apply(null, arguments); _bufferLog('warn', arguments); };
+
+window.addEventListener('error', e => _bufferLog('error', [`Uncaught: ${e.message} at ${e.filename}:${e.lineno}`]));
+window.addEventListener('unhandledrejection', e => _bufferLog('error', [`Unhandled rejection: ${e.reason}`]));
+
+function _flushLogs() {
+  if (!_logBuffer.length) return;
+  const batch = _logBuffer.splice(0);
+  const token = localStorage.getItem('authToken');
+  if (!token) return;
+  fetch('/api/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+    body: JSON.stringify(batch)
+  }).catch(() => {});
+}
+
+setInterval(_flushLogs, 5000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _flushLogs(); });
+
+// ==================== AUTH ====================
+const authToken = localStorage.getItem('authToken');
+if (!authToken) location.href = '/@login';
+
+const authHeaders = { 'x-auth-token': authToken };
+
+function authFetch(url, opts = {}) {
+  opts.headers = { ...authHeaders, ...(opts.headers || {}) };
+  return fetch(url, opts);
+}
+
+// ==================== QR CODE GENERATOR ====================
+function generateQR(canvas, text) {
+  // Minimal QR code generator (mode byte, version 2, ECC L)
+  // For simplicity, use a dynamic import of a small library
+  const size = 300;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+
+  // We'll render via an image from a QR API
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => { ctx.drawImage(img, 0, 0, size, size); };
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+}
+
+// ==================== INVITE ====================
+function openInvite() {
+  document.getElementById('invite-overlay').classList.add('active');
+  document.getElementById('invite-qr').style.display = 'none';
+  document.getElementById('invite-error').style.display = 'none';
+  loadMembers();
+}
+
+function closeInvite() {
+  document.getElementById('invite-overlay').classList.remove('active');
+}
+
+async function sendInvite() {
+  const name = document.getElementById('invite-name').value.trim();
+  const phone = document.getElementById('invite-phone').value.trim();
+  const err = document.getElementById('invite-error');
+  if (!name || !phone) { err.textContent = 'Enter name and phone'; err.style.display = ''; return; }
+  err.style.display = 'none';
+
+  try {
+    const r = await authFetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ name, phone })
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error; err.style.display = ''; return; }
+
+    // Show QR
+    const loginUrl = location.origin + '/@login?phone=' + encodeURIComponent(phone);
+    document.getElementById('invite-qr-name').textContent = `QR for ${name}`;
+    document.getElementById('invite-sms-status').textContent = data.smsSent
+      ? `Text sent to ${phone}` : 'SMS failed — use QR instead';
+    document.getElementById('invite-sms-status').style.color = data.smsSent ? '#060' : '#c00';
+    generateQR(document.getElementById('invite-qr-canvas'), loginUrl);
+    document.getElementById('invite-qr').style.display = '';
+
+    // Clear form
+    document.getElementById('invite-name').value = '';
+    document.getElementById('invite-phone').value = '';
+    loadMembers();
+  } catch (e) {
+    err.textContent = 'Network error'; err.style.display = '';
+  }
+}
+
+async function loadMembers() {
+  try {
+    const r = await authFetch('/api/users');
+    const names = await r.json();
+    const ul = document.getElementById('invite-members');
+    ul.innerHTML = names.map(n => `<li>${n}</li>`).join('');
+  } catch {}
+}
+
 // ==================== MAP ====================
 const map = L.map('map');
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -293,9 +482,12 @@ const transcriptEl = document.getElementById('transcript');
 const previewCard = document.getElementById('preview-card');
 const cardText = previewCard.querySelector('.card-text');
 const cardThumb = previewCard.querySelector('.card-thumb');
+const cardPlay = previewCard.querySelector('.card-play');
+const cardAudio = document.getElementById('card-audio');
 
 function formatMeta(entry) {
   const parts = [];
+  if (entry.user) parts.push(entry.user);
   if (entry.address) parts.push(entry.address);
   if (entry.timestamp) {
     const d = new Date(entry.timestamp);
@@ -315,9 +507,17 @@ function setEntryContent(el, entry, prefix) {
 let currentEntry = null;
 let currentMarkerEl = null;
 
+function stopCardAudio() {
+  cardAudio.pause();
+  cardAudio.removeAttribute('src');
+  cardAudio.load();
+  cardPlay.classList.remove('playing');
+}
+
 function closePreview() {
   previewCard.classList.remove('active');
   cardThumb.removeAttribute('src');
+  stopCardAudio();
   if (currentMarkerEl) currentMarkerEl.classList.remove('selected');
   currentEntry = null;
   currentMarkerEl = null;
@@ -325,6 +525,7 @@ function closePreview() {
 
 function showPreview(entry, markerEl) {
   if (currentMarkerEl) currentMarkerEl.classList.remove('selected');
+  stopCardAudio();
   currentEntry = entry;
   currentMarkerEl = markerEl;
   if (markerEl) markerEl.classList.add('selected');
@@ -335,7 +536,12 @@ function showPreview(entry, markerEl) {
     meta = `(${group.index + 1}/${group.entries.length}) `;
   }
   setEntryContent(cardText, entry, meta);
-  cardThumb.src = entry.thumbnail ? '/videos/' + entry.thumbnail : '/videos/' + entry.filename;
+  const hasThumb = !!entry.thumbnail;
+  cardThumb.style.display = hasThumb ? '' : 'none';
+  cardPlay.style.display = hasThumb ? 'none' : '';
+  if (hasThumb) {
+    cardThumb.src = '/videos/' + entry.thumbnail;
+  }
   previewCard.classList.add('active');
 }
 
@@ -356,6 +562,18 @@ function closePlayer() {
 }
 
 cardThumb.addEventListener('click', (e) => { e.stopPropagation(); if (currentEntry) openPlayer(currentEntry); });
+cardPlay.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!currentEntry) return;
+  if (cardPlay.classList.contains('playing')) {
+    stopCardAudio();
+  } else {
+    cardAudio.src = '/videos/' + currentEntry.filename;
+    cardAudio.play();
+    cardPlay.classList.add('playing');
+  }
+});
+cardAudio.addEventListener('ended', () => { cardPlay.classList.remove('playing'); });
 vid.addEventListener('ended', closePlayer);
 player.addEventListener('click', closePlayer);
 map.on('click', closePreview);
@@ -367,6 +585,16 @@ const cameraInset = document.getElementById('camera-inset');
 const cameraPreview = document.getElementById('camera-preview');
 const cameraTimer = document.getElementById('camera-timer');
 
+let audioOnly = localStorage.getItem('audioOnly') !== 'false'; // default true
+
+function toggleMode() {
+  audioOnly = !audioOnly;
+  localStorage.setItem('audioOnly', audioOnly);
+  document.getElementById('mode-btn').classList.toggle('video-mode', !audioOnly);
+}
+
+// Set initial button state
+document.getElementById('mode-btn').classList.toggle('video-mode', !audioOnly);
 let stream = null;
 let recorder = null;
 let chunks = [];
@@ -374,8 +602,10 @@ let timerInterval = null;
 let secondsLeft = MAX_SECONDS;
 let geoPos = null;
 
+let geoInitialised = false;
 function initGeo() {
-  if (!navigator.geolocation) return;
+  if (geoInitialised || !navigator.geolocation) return;
+  geoInitialised = true;
   navigator.geolocation.watchPosition(p => { geoPos = p.coords; }, () => {},
     { enableHighAccuracy: true, maximumAge: 60000 });
   navigator.geolocation.getCurrentPosition(p => { if (!geoPos) geoPos = p.coords; }, () => {},
@@ -385,9 +615,12 @@ function initGeo() {
 async function initCamera() {
   if (!window.isSecureContext) return;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-    cameraPreview.srcObject = stream;
-  } catch (e) { console.error('Camera error:', e); }
+    const constraints = audioOnly
+      ? { audio: true }
+      : { video: { facingMode: 'user' }, audio: true };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (!audioOnly) cameraPreview.srcObject = stream;
+  } catch (e) { console.error('Camera/mic error:', e); }
 }
 
 function stopCamera() {
@@ -399,19 +632,26 @@ function stopCamera() {
 }
 
 async function startRecording() {
+  initGeo();
   if (!stream) await initCamera();
   if (!stream) return;
   chunks = [];
 
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-    ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+  let mimeType;
+  if (audioOnly) {
+    mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus' : 'audio/webm';
+  } else {
+    mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+  }
   recorder = new MediaRecorder(stream, { mimeType });
   recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
   recorder.onstop = () => upload();
   recorder.start(100);
 
   btn.classList.add('recording');
-  cameraInset.classList.add('active');
+  if (!audioOnly) cameraInset.classList.add('active');
   secondsLeft = MAX_SECONDS;
   cameraTimer.textContent = secondsLeft;
 
@@ -439,7 +679,7 @@ btn.addEventListener('click', () => {
 // ==================== UPLOAD QUEUE ====================
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('selfie-queue', 1);
+    const req = indexedDB.open('fieldnote-queue', 1);
     req.onupgradeneeded = () => req.result.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -487,13 +727,43 @@ function xhrUpload(form) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.upload.onprogress = e => { if (e.lengthComputable) setUploadProgress(e.loaded / e.total); };
-    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error('Upload failed')); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { resolve({ ok: true }); }
+      } else reject(new Error('Upload failed'));
+    };
     xhr.onerror = () => reject(new Error('Network error'));
     xhr.ontimeout = () => reject(new Error('Timeout'));
     xhr.timeout = 300000;
     xhr.open('POST', '/upload');
+    xhr.setRequestHeader('x-auth-token', authToken);
     xhr.send(form);
   });
+}
+
+// ---- Connection quality check ----
+async function connectionGood() {
+  // Use Network Information API if available
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn) {
+    // Bail on slow or offline connections
+    if (conn.saveData) return false;
+    const dominated = ['slow-2g', '2g'];
+    if (dominated.includes(conn.effectiveType)) return false;
+  }
+  if (!navigator.onLine) return false;
+  // Probe the server with a small request and check latency
+  try {
+    const start = Date.now();
+    const r = await fetch('/api/version', { headers: authHeaders, cache: 'no-store' });
+    const latency = Date.now() - start;
+    if (!r.ok) return false;
+    console.log(`Connection probe: ${latency}ms, type=${conn ? conn.effectiveType : '?'}`);
+    return latency < 3000;
+  } catch {
+    return false;
+  }
 }
 
 let queuePending = false;
@@ -504,10 +774,11 @@ function updateQueueDisplay(remaining) {
   if (remaining === 0) {
     statusEl.classList.add('done');
     statusCount.textContent = '';
-    // Hide tick after 3 seconds
-    setTimeout(() => { statusEl.classList.remove('done'); }, 3000);
+    // Hide after tick animation
+    setTimeout(() => { statusEl.classList.remove('done'); statusEl.classList.remove('active'); }, 3000);
   } else {
     statusEl.classList.remove('done');
+    statusEl.classList.add('active');
     statusCount.textContent = remaining;
   }
 }
@@ -518,6 +789,13 @@ async function processQueue() {
   const items = await getQueue();
   if (!items.length) { updateQueueDisplay(0); return; }
 
+  // Check connection before attempting uploads
+  if (!await connectionGood()) {
+    console.log(`Upload deferred: poor connection (${items.length} queued)`);
+    updateQueueDisplay(items.length);
+    return;
+  }
+
   uploading = true;
   updateQueueDisplay(items.length);
 
@@ -526,19 +804,21 @@ async function processQueue() {
     try {
       setUploadProgress(0);
       updateQueueDisplay(items.length - i);
-      await fetch('/api/pre-upload', {
+      await authFetch('/api/pre-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: item.lat, lon: item.lon, duration: item.duration, size: item.blob.size, timestamp: item.timestamp })
       });
       const form = new FormData();
-      form.append('video', item.blob, 'selfie.webm');
+      form.append('video', item.blob, 'fieldnote.webm');
       form.append('lat', item.lat || '');
       form.append('lon', item.lon || '');
       form.append('recorded_at', item.timestamp || '');
-      await xhrUpload(form);
+      const resp = await xhrUpload(form);
+      if (!resp.ok || !resp.filename) throw new Error('Server did not confirm receipt');
       setUploadProgress(1);
       await dequeue(item.id);
+      console.log('Upload confirmed:', resp.filename);
       playDing();
     } catch (e) {
       uploading = false;
@@ -564,7 +844,7 @@ async function processQueue() {
 setInterval(processQueue, 30000);
 
 async function upload() {
-  const blob = new Blob(chunks, { type: 'video/webm' });
+  const blob = new Blob(chunks, { type: audioOnly ? 'audio/webm' : 'video/webm' });
   const duration = MAX_SECONDS - secondsLeft;
   const lat = geoPos ? geoPos.latitude : null;
   const lon = geoPos ? geoPos.longitude : null;
@@ -605,7 +885,7 @@ function updateMyLocation() {
 updateMyLocation();
 setInterval(updateMyLocation, 60000);
 
-const DotIcon = L.divIcon({ className: 'selfie-dot', iconSize: [24, 24] });
+const DotIcon = L.divIcon({ className: 'fn-dot', iconSize: [24, 24] });
 const markerGroups = {};
 let allEntries = {};
 let initialLoad = true;
@@ -633,7 +913,7 @@ function locKey(entry) {
 }
 
 function loadMarkers() {
-  fetch('/api/uploads').then(r => r.json()).then(rawEntries => {
+  authFetch('/api/uploads').then(r => r.json()).then(rawEntries => {
     const entries = filterMode === 'today'
       ? rawEntries.filter(e => isToday(e.timestamp))
       : rawEntries;
@@ -711,14 +991,14 @@ function openReport() {
   const content = document.getElementById('report-content');
   content.textContent = '';
   overlay.classList.add('active');
-  fetch('/api/report')
+  authFetch('/api/report')
     .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
     .then(data => { content.innerHTML = renderReport(data.report); })
     .catch(() => { content.textContent = 'Report unavailable — try again shortly.'; });
 }
 
 // ==================== SSE / PEERS ====================
-const sse = new EventSource('/api/events');
+const sse = new EventSource('/api/events?token=' + encodeURIComponent(authToken));
 let myClientId = null;
 const PeerIcon = L.divIcon({ className: 'peer-dot', iconSize: [10, 10] });
 const peerMarkers = {};
@@ -746,7 +1026,7 @@ sse.addEventListener('locations', (e) => {
 function sendMyLocation() {
   if (!myClientId || !navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(p => {
-    fetch('/api/location', {
+    authFetch('/api/location', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: myClientId, lat: p.coords.latitude, lon: p.coords.longitude })
     });
@@ -759,7 +1039,7 @@ sse.addEventListener('new-upload', () => loadMarkers());
 let appVersion = null;
 
 function checkVersion() {
-  fetch('/api/version').then(r => r.json()).then(data => {
+  authFetch('/api/version').then(r => r.json()).then(data => {
     if (appVersion === null) { appVersion = data.version; return; }
     if (data.version !== appVersion) {
       const isRecording = recorder && recorder.state === 'recording';
@@ -786,7 +1066,9 @@ setInterval(checkVersion, 5000);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
 // ==================== INIT ====================
-initGeo();
+// Defer geo permission until first user interaction
+document.addEventListener('click', initGeo, { once: true });
+document.addEventListener('touchstart', initGeo, { once: true });
 </script>
 </body>
 </html>

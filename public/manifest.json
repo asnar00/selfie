@@ -1,6 +1,6 @@
 {
-  "name": "Selfie",
-  "short_name": "Selfie",
+  "name": "Fieldnote",
+  "short_name": "Fieldnote",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

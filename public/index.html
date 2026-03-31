@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Selfie</title>
+<title>Fieldnote</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -204,7 +204,7 @@ html, body {
   <div id="btn" role="button" tabindex="0">
     <div class="stop-icon"></div>
   </div>
-  <div id="status">press the button to record a selfie video…</div>
+  <div id="status">press the button to record a field note…</div>
 </div>
 
 <script>
@@ -308,7 +308,7 @@ function stopRecording() {
 // ---- IndexedDB upload queue ----
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('selfie-queue', 1);
+    const req = indexedDB.open('fieldnote-queue', 1);
     req.onupgradeneeded = () => req.result.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -398,7 +398,7 @@ async function processQueue() {
       });
 
       const form = new FormData();
-      form.append('video', item.blob, 'selfie.webm');
+      form.append('video', item.blob, 'fieldnote.webm');
       form.append('lat', item.lat || '');
       form.append('lon', item.lon || '');
 
@@ -420,7 +420,7 @@ async function processQueue() {
   const remaining = await getQueue();
   if (remaining.length === 0) {
     document.getElementById('upload-progress').classList.remove('visible');
-    statusEl.textContent = 'press the button to record a selfie video…';
+    statusEl.textContent = 'press the button to record a field note…';
   }
 }
 

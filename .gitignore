@@ -6,3 +6,6 @@ report.json
 version.json
 switzer.woff2
 *.log
+.env
+users.json
+auth-tokens.json

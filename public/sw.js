@@ -1,4 +1,4 @@
-const CACHE = 'selfie-v2';
+const CACHE = 'fieldnote-v1';
 
 self.addEventListener('install', e => {
   e.waitUntil(
