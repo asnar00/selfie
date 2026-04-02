@@ -20,21 +20,67 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 
 #map { width: 100%; height: 100%; }
 
-/* ---- Nav buttons ---- */
-.nav-btn {
+/* ---- Bottom bar ---- */
+#bottom-bar {
   position: fixed;
-  z-index: 9999;
-  padding: 6px 14px;
-  border-radius: 12px;
-  border: none;
-  background: rgba(255, 192, 128, 0.85);
-  color: #000;
-  font: 600 13px/1 'Switzer', sans-serif;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  text-decoration: none;
-  box-shadow: 0 0 0 1px #000;
+  bottom: max(24px, calc(env(safe-area-inset-bottom, 8px) + 12px));
+  left: 16px; right: 16px;
+  height: 48px; z-index: 9500;
+  background: rgba(255, 192, 128, 0.92);
+  border-radius: 24px;
+  display: flex; align-items: center;
+  padding: 0 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
 }
+#bottom-bar .bar-left,
+#bottom-bar .bar-right {
+  flex: 1; display: flex; align-items: center; gap: 4px;
+}
+#bottom-bar .bar-left { justify-content: flex-start; }
+#bottom-bar .bar-right { justify-content: flex-end; }
+#bottom-bar .bar-center { width: 80px; flex-shrink: 0; }
+
+.bar-btn {
+  width: 38px; height: 38px; border: none; border-radius: 50%;
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent; padding: 0;
+}
+.bar-btn svg { width: 20px; height: 20px; fill: none; stroke: #000; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bar-btn.filled svg { fill: #000; stroke: none; }
+
+/* ---- Rec button (overlaps bar) ---- */
+#rec-area {
+  position: fixed;
+  bottom: max(16px, calc(env(safe-area-inset-bottom, 8px) + 4px));
+  left: 0; right: 0;
+  z-index: 9600;
+  display: flex; justify-content: center; align-items: flex-end;
+  pointer-events: none;
+  height: 72px;
+}
+#btn {
+  pointer-events: auto;
+  width: 64px; height: 64px;
+  border-radius: 50%; border: 3px solid #fff;
+  background: #e33; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .2s;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+#btn.recording { background: #fff; }
+#btn.recording .stop-icon { display: block; }
+#btn .stop-icon {
+  display: none; width: 20px; height: 20px; border-radius: 3px; background: #e33;
+}
+
+/* ---- Upload status (in bar) ---- */
+#upload-status {
+  width: 32px; height: 32px;
+  display: none;
+}
+#upload-status.active { display: block; }
 
 /* ---- Report overlay ---- */
 #report-overlay {
@@ -169,77 +215,31 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   text-shadow: 0 1px 4px rgba(0,0,0,.7);
 }
 
-/* ---- Record button (bottom center) ---- */
-#rec-area {
-  position: fixed;
-  bottom: max(28px, calc(env(safe-area-inset-bottom, 20px) + 8px));
-  left: 0; right: 0;
-  z-index: 9500;
-  display: flex; justify-content: center; align-items: center;
-  pointer-events: none;
-}
-#btn {
-  pointer-events: auto;
-  width: 72px; height: 72px;
-  border-radius: 50%; border: 4px solid #fff;
-  background: #e33; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .2s;
-  display: flex; align-items: center; justify-content: center;
-}
-#btn.recording { background: #fff; }
-#btn.recording .stop-icon { display: block; }
-#btn .stop-icon {
-  display: none; width: 22px; height: 22px; border-radius: 3px; background: #e33;
-}
-
-/* ---- Upload status (bottom left) ---- */
-#upload-status {
-  position: fixed;
-  bottom: max(28px, calc(env(safe-area-inset-bottom, 20px) + 8px));
-  left: 20px; z-index: 9500;
-  width: 40px; height: 40px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 50%;
-  display: none;
-}
-#upload-status.active { display: block; }
+/* ---- Upload status colors ---- */
 #upload-status circle { fill: none; stroke-width: 3; }
-#upload-status .bg { stroke: rgba(255,255,255,.3); }
+#upload-status .bg { stroke: rgba(0,0,0,.15); }
 #upload-status .fg {
-  stroke: #f80; stroke-linecap: round;
+  stroke: #000; stroke-linecap: round;
   transform: rotate(-90deg); transform-origin: center;
   transition: stroke-dashoffset .2s linear;
 }
 #upload-status .count {
-  fill: #fff; font: 600 12px sans-serif; text-anchor: middle; dominant-baseline: central;
+  fill: #000; font: 600 10px sans-serif; text-anchor: middle; dominant-baseline: central;
 }
 #upload-status .tick {
-  stroke: #4f4; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; fill: none;
+  stroke: #060; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; fill: none;
   opacity: 0; transition: opacity .3s;
 }
 #upload-status.done .tick { opacity: 1; }
 #upload-status.done .fg, #upload-status.done .count { opacity: 0; }
-#upload-status.done .bg { stroke: rgba(255,255,255,.15); }
+#upload-status.done .bg { stroke: rgba(0,0,0,.08); }
 
-/* ---- Invite button (bottom right) ---- */
-#invite-btn {
-  bottom: max(28px, calc(env(safe-area-inset-bottom, 20px) + 8px));
-  right: 20px;
-}
-
-/* ---- Mode toggle (left of rec button) ---- */
-#mode-btn {
-  bottom: max(46px, calc(env(safe-area-inset-bottom, 20px) + 26px));
-  right: calc(50% + 56px);
-  width: 36px; height: 36px; padding: 0;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-}
-#mode-btn svg { width: 18px; height: 18px; fill: #000; }
+/* ---- Mode toggle ---- */
 #mode-btn .mode-video { display: none; }
 #mode-btn.video-mode .mode-video { display: block; }
 #mode-btn.video-mode .mode-audio { display: none; }
+#mode-btn svg { fill: #000; stroke: none; }
+#mode-btn.bar-btn svg { width: 18px; height: 18px; }
 
 /* ---- Map dots ---- */
 .fn-dot {
@@ -252,43 +252,68 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   transform: scale(1.4); border-width: 4px;
   box-shadow: 0 0 0 4px rgba(255,136,0,.4), 0 1px 4px rgba(0,0,0,.4);
 }
-.me-dot {
-  width: 14px; height: 14px; background: #4285f4;
-  border: 3px solid #fff; border-radius: 50%;
+.user-dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 11px/1 sans-serif; color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  pointer-events: none;
+}
+.user-dot.me {
+  background: #4285f4;
   box-shadow: 0 0 0 3px rgba(66,133,244,.3), 0 1px 4px rgba(0,0,0,.3);
 }
-.peer-dot {
-  width: 10px; height: 10px; background: #1a5ab8;
-  border: 2px solid #fff; border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+.user-dot.peer {
+  background: #1a5ab8;
+}
+
+/* ---- Version badge ---- */
+#version-badge {
+  display: none; position: fixed;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  right: 12px; z-index: 9999;
+  padding: 4px 10px; border-radius: 8px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  font: 600 11px/1 'Switzer', sans-serif;
+}
+#version-badge.show { display: block; }
+
+/* ---- Audio recording indicator ---- */
+#audio-recording {
+  display: none; position: fixed;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 9500;
+  color: #fff; font: 600 18px/1 'Switzer', sans-serif;
+  text-shadow: 0 1px 6px rgba(0,0,0,.6);
+  pointer-events: none;
+}
+#audio-recording.active { display: block; }
+#audio-recording .rec-dot {
+  display: inline-block; width: 10px; height: 10px;
+  background: #e33; border-radius: 50%; margin-right: 8px;
+  vertical-align: middle;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* ---- Filter toggle ---- */
-#filter-btn {
-  bottom: max(124px, calc(env(safe-area-inset-bottom, 20px) + 104px));
-  right: 20px;
-}
+#filter-btn.bar-btn svg.filter-all { display: none; }
+#filter-btn.show-all svg.filter-today { display: none; }
+#filter-btn.show-all svg.filter-all { display: block; }
 </style>
 </head>
 <body>
 
-<!-- Nav -->
-<button id="filter-btn" class="nav-btn" onclick="toggleFilter()">today</button>
-<button class="nav-btn" style="bottom:max(76px, calc(env(safe-area-inset-bottom, 20px) + 56px));right:20px" onclick="openReport()">report</button>
+<!-- Overlays -->
 <div id="report-overlay">
   <button class="close-btn" onclick="document.getElementById('report-overlay').classList.remove('active')">close</button>
   <h1>Canvassing Report</h1>
   <div id="report-content"></div>
 </div>
-
-<!-- QR -->
-<button id="mode-btn" class="nav-btn" onclick="toggleMode()">
-  <svg viewBox="0 0 24 24">
-    <g class="mode-audio"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z"/></g>
-    <g class="mode-video"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/></g>
-  </svg>
-</button>
-<button id="invite-btn" class="nav-btn" onclick="openInvite()">invite</button>
 <div id="invite-overlay">
   <button class="close-btn" onclick="closeInvite()">close</button>
   <h1>Invite</h1>
@@ -309,6 +334,9 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
     <ul id="invite-members"></ul>
   </div>
 </div>
+
+<!-- Version badge -->
+<div id="version-badge"></div>
 
 <!-- Map -->
 <div id="map"></div>
@@ -335,20 +363,51 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   <div id="camera-timer"></div>
 </div>
 
-<!-- Record button -->
+<!-- Audio recording indicator -->
+<div id="audio-recording"><span class="rec-dot"></span>recording</div>
+
+<!-- Record button (floats above bar) -->
 <div id="rec-area">
   <div id="btn" role="button" tabindex="0">
     <div class="stop-icon"></div>
   </div>
 </div>
 
-<!-- Upload progress -->
-<svg id="upload-status" viewBox="0 0 40 40">
-  <circle class="bg" cx="20" cy="20" r="17"/>
-  <circle class="fg" cx="20" cy="20" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/>
-  <text class="count" x="20" y="20"></text>
-  <polyline class="tick" points="13,20 18,25 27,15"/>
-</svg>
+<!-- Bottom bar -->
+<div id="bottom-bar">
+  <div class="bar-left">
+    <!-- Upload indicator -->
+    <svg id="upload-status" viewBox="0 0 40 40">
+      <circle class="bg" cx="20" cy="20" r="17"/>
+      <circle class="fg" cx="20" cy="20" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/>
+      <text class="count" x="20" y="20"></text>
+      <polyline class="tick" points="13,20 18,25 27,15"/>
+    </svg>
+    <!-- Mode toggle -->
+    <button id="mode-btn" class="bar-btn" onclick="toggleMode()">
+      <svg viewBox="0 0 24 24">
+        <g class="mode-audio"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z"/></g>
+        <g class="mode-video"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/></g>
+      </svg>
+    </button>
+  </div>
+  <div class="bar-center"></div>
+  <div class="bar-right">
+    <!-- Filter: clock icon -->
+    <button id="filter-btn" class="bar-btn" onclick="toggleFilter()">
+      <svg class="filter-today" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      <svg class="filter-all" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+    </button>
+    <!-- Report: doc icon -->
+    <button class="bar-btn" onclick="openReport()">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+    </button>
+    <!-- Invite: envelope icon -->
+    <button class="bar-btn" onclick="openInvite()">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 4 12 13 2 4"/></svg>
+    </button>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -600,6 +659,7 @@ let recorder = null;
 let chunks = [];
 let timerInterval = null;
 let secondsLeft = MAX_SECONDS;
+let secondsElapsed = 0;
 let geoPos = null;
 
 let geoInitialised = false;
@@ -651,14 +711,21 @@ async function startRecording() {
   recorder.start(100);
 
   btn.classList.add('recording');
-  if (!audioOnly) cameraInset.classList.add('active');
+  if (audioOnly) document.getElementById('audio-recording').classList.add('active');
+  else cameraInset.classList.add('active');
   secondsLeft = MAX_SECONDS;
-  cameraTimer.textContent = secondsLeft;
+  secondsElapsed = 0;
+  cameraTimer.textContent = audioOnly ? '0' : secondsLeft;
 
   timerInterval = setInterval(() => {
-    secondsLeft--;
-    cameraTimer.textContent = secondsLeft;
-    if (secondsLeft <= 0) stopRecording();
+    secondsElapsed++;
+    if (audioOnly) {
+      cameraTimer.textContent = secondsElapsed;
+    } else {
+      secondsLeft--;
+      cameraTimer.textContent = secondsLeft;
+      if (secondsLeft <= 0) stopRecording();
+    }
   }, 1000);
 }
 
@@ -667,6 +734,7 @@ function stopRecording() {
   clearInterval(timerInterval);
   recorder.stop();
   btn.classList.remove('recording');
+  document.getElementById('audio-recording').classList.remove('active');
   cameraInset.classList.remove('active');
   stopCamera();
 }
@@ -845,7 +913,7 @@ setInterval(processQueue, 30000);
 
 async function upload() {
   const blob = new Blob(chunks, { type: audioOnly ? 'audio/webm' : 'video/webm' });
-  const duration = MAX_SECONDS - secondsLeft;
+  const duration = audioOnly ? secondsElapsed : MAX_SECONDS - secondsLeft;
   const lat = geoPos ? geoPos.latitude : null;
   const lon = geoPos ? geoPos.longitude : null;
 
@@ -870,7 +938,17 @@ function playDing() {
 }
 
 // ==================== MAP MARKERS ====================
-const MeIcon = L.divIcon({ className: 'me-dot', iconSize: [14, 14] });
+function userIcon(name, isMe) {
+  const initial = (name || '?').charAt(0).toUpperCase();
+  return L.divIcon({
+    className: 'user-dot ' + (isMe ? 'me' : 'peer'),
+    iconSize: [22, 22],
+    html: initial
+  });
+}
+
+const myName = localStorage.getItem('userName') || '?';
+const MeIcon = userIcon(myName, true);
 let meMarker = null;
 
 function updateMyLocation() {
@@ -893,7 +971,7 @@ let filterMode = 'today'; // 'today' or 'all'
 
 function toggleFilter() {
   filterMode = filterMode === 'today' ? 'all' : 'today';
-  document.getElementById('filter-btn').textContent = filterMode;
+  document.getElementById('filter-btn').classList.toggle('show-all', filterMode === 'all');
   // Clear all markers and reload
   for (const key in markerGroups) {
     map.removeLayer(markerGroups[key].marker);
@@ -1000,7 +1078,6 @@ function openReport() {
 // ==================== SSE / PEERS ====================
 const sse = new EventSource('/api/events?token=' + encodeURIComponent(authToken));
 let myClientId = null;
-const PeerIcon = L.divIcon({ className: 'peer-dot', iconSize: [10, 10] });
 const peerMarkers = {};
 
 sse.addEventListener('welcome', (e) => {
@@ -1016,7 +1093,7 @@ sse.addEventListener('locations', (e) => {
     if (loc.id === myClientId) return;
     seen.add(loc.id);
     if (peerMarkers[loc.id]) peerMarkers[loc.id].setLatLng([loc.lat, loc.lon]);
-    else peerMarkers[loc.id] = L.marker([loc.lat, loc.lon], { icon: PeerIcon, zIndexOffset: 500 }).addTo(map);
+    else peerMarkers[loc.id] = L.marker([loc.lat, loc.lon], { icon: userIcon(loc.name, false), zIndexOffset: 500 }).addTo(map);
   });
   for (const id in peerMarkers) {
     if (!seen.has(parseInt(id))) { map.removeLayer(peerMarkers[id]); delete peerMarkers[id]; }
@@ -1042,6 +1119,7 @@ function checkVersion() {
   authFetch('/api/version').then(r => r.json()).then(data => {
     if (appVersion === null) { appVersion = data.version; return; }
     if (data.version !== appVersion) {
+      sessionStorage.setItem('versionUpdated', data.version);
       const isRecording = recorder && recorder.state === 'recording';
       if (isRecording || uploading) {
         const check = setInterval(() => {
@@ -1069,6 +1147,22 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 // Defer geo permission until first user interaction
 document.addEventListener('click', initGeo, { once: true });
 document.addEventListener('touchstart', initGeo, { once: true });
+
+// Send location immediately when app comes back to foreground
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { updateMyLocation(); sendMyLocation(); }
+});
+
+// Show version badge if we just updated
+const updatedVersion = sessionStorage.getItem('versionUpdated');
+if (updatedVersion) {
+  sessionStorage.removeItem('versionUpdated');
+  playDing();
+  const badge = document.getElementById('version-badge');
+  badge.textContent = 'v' + updatedVersion;
+  badge.classList.add('show');
+  setTimeout(() => badge.classList.remove('show'), 4000);
+}
 </script>
 </body>
 </html>

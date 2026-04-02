@@ -86,8 +86,8 @@ function validateToken(token) {
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// ---- Version (content hash of source files) ----
-function computeVersion() {
+// ---- Version (counter that only bumps on code changes) ----
+function computeContentHash() {
   const hash = crypto.createHash('md5');
   const files = [
     path.join(__dirname, 'server.js'),
@@ -98,9 +98,21 @@ function computeVersion() {
   for (const f of files) {
     try { hash.update(fs.readFileSync(f)); } catch {}
   }
-  return hash.digest('hex').slice(0, 12);
+  return hash.digest('hex');
 }
-const APP_VERSION = computeVersion();
+function getAppVersion() {
+  try {
+    const v = JSON.parse(fs.readFileSync(VERSION_PATH, 'utf8'));
+    if (v.hash === computeContentHash()) return v.version;
+    const next = (v.version || 0) + 1;
+    fs.writeFileSync(VERSION_PATH, JSON.stringify({ version: next, hash: computeContentHash() }));
+    return next;
+  } catch {
+    fs.writeFileSync(VERSION_PATH, JSON.stringify({ version: 1, hash: computeContentHash() }));
+    return 1;
+  }
+}
+const APP_VERSION = getAppVersion();
 
 // ---- Logging ----
 function log(...args) {
@@ -179,7 +191,7 @@ app.post('/api/auth/send-code', async (req, res) => {
   if (!user) return res.status(403).json({ error: 'Not an authorised user' });
 
   const code = String(Math.floor(1000 + Math.random() * 9000));
-  pendingCodes.set(normalisePhone(phone), { code, expires: Date.now() + 5 * 60 * 1000 });
+  pendingCodes.set(normalisePhone(phone), { code, expires: Date.now() + 5 * 60 * 1000, attempts: 0 });
 
   try {
     await vonage.sms.send({
@@ -201,7 +213,14 @@ app.post('/api/auth/verify', (req, res) => {
 
   const norm = normalisePhone(phone);
   const pending = pendingCodes.get(norm);
-  if (!pending || pending.code !== code) return res.status(403).json({ error: 'Invalid code' });
+  if (!pending) return res.status(403).json({ error: 'No code pending — request a new one' });
+  pending.attempts = (pending.attempts || 0) + 1;
+  if (pending.attempts > 3) {
+    pendingCodes.delete(norm);
+    log(`Too many attempts for ${norm}, code invalidated`);
+    return res.status(403).json({ error: 'Too many attempts — request a new code' });
+  }
+  if (pending.code !== code) return res.status(403).json({ error: 'Invalid code' });
   if (Date.now() > pending.expires) {
     pendingCodes.delete(norm);
     return res.status(403).json({ error: 'Code expired' });
@@ -597,7 +616,9 @@ app.get('/api/events', (req, res) => {
   });
   res.flushHeaders();
   const clientId = ++clientIdCounter;
-  sseClients.set(res, { id: clientId, lat: null, lon: null, lastSeen: Date.now() });
+  const authUser = validateToken(req.query.token || parseCookie(req.headers.cookie, 'authToken'));
+  const userName = authUser ? authUser.name : '?';
+  sseClients.set(res, { id: clientId, name: userName, lat: null, lon: null, lastSeen: Date.now() });
   res.write(`event: welcome\ndata: ${JSON.stringify({ id: clientId })}\n\n`);
   log(`SSE client ${clientId} connected (${sseClients.size} total)`);
   req.on('close', () => {
@@ -626,7 +647,7 @@ function broadcastLocations() {
   const locations = [];
   for (const [, info] of sseClients) {
     if (info.lat != null && info.lon != null) {
-      locations.push({ id: info.id, lat: info.lat, lon: info.lon });
+      locations.push({ id: info.id, name: info.name, lat: info.lat, lon: info.lon });
     }
   }
   broadcast('locations', locations);
@@ -646,23 +667,23 @@ app.get('/api/version', (_req, res) => {
 // Restart endpoint
 app.post('/@restart', (_req, res) => {
   res.json({ ok: true, restarting: true });
-  log('Broadcasting reload to clients...');
-  broadcast('reload', { timestamp: Date.now() });
-  // Give clients a moment to receive the message
-  setTimeout(() => {
-    log('Restarting server...');
-    // Close SSE connections so server.close() doesn't hang
-    for (const [client] of sseClients) { client.end(); }
-    sseClients.clear();
-    server.close(() => {
-      const { spawn } = require('child_process');
-      spawn(process.argv[0], process.argv.slice(1), {
-        stdio: 'inherit',
-        detached: true
-      }).unref();
-      process.exit(0);
+  log('Restarting server...');
+  // Close SSE connections so server.close() doesn't hang
+  for (const [client] of sseClients) { client.end(); }
+  sseClients.clear();
+  server.close(() => {
+    const { spawn } = require('child_process');
+    const child = spawn(process.argv[0], process.argv.slice(1), {
+      stdio: 'inherit',
+      detached: true,
+      cwd: process.cwd()
     });
-  }, 500);
+    child.unref();
+    // Give child a moment to bind the port before we exit
+    setTimeout(() => process.exit(0), 500);
+  });
+  // Failsafe: if server.close hangs, force exit after 3s
+  setTimeout(() => { log('Forced exit'); process.exit(1); }, 3000);
 });
 
 const server = app.listen(PORT, () => {
