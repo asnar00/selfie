@@ -30,14 +30,14 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   border-radius: 24px;
   display: flex; align-items: center;
   padding: 0 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  box-shadow: 0 0 0 1px #000, 0 2px 8px rgba(0,0,0,.15);
 }
 #bottom-bar .bar-left,
 #bottom-bar .bar-right {
   flex: 1; display: flex; align-items: center; gap: 4px;
 }
-#bottom-bar .bar-left { justify-content: flex-start; }
-#bottom-bar .bar-right { justify-content: flex-end; }
+#bottom-bar .bar-left { justify-content: space-evenly; padding-left: 8px; position: relative; }
+#bottom-bar .bar-right { justify-content: space-evenly; padding-right: 8px; }
 #bottom-bar .bar-center { width: 80px; flex-shrink: 0; }
 
 .bar-btn {
@@ -69,7 +69,11 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 8px rgba(0,0,0,.25);
 }
+#btn .rec-label {
+  color: #fff; font: 700 13px/1 'Switzer', sans-serif; text-transform: uppercase; letter-spacing: 0.5px;
+}
 #btn.recording { background: #fff; }
+#btn.recording .rec-label { display: none; }
 #btn.recording .stop-icon { display: block; }
 #btn .stop-icon {
   display: none; width: 20px; height: 20px; border-radius: 3px; background: #e33;
@@ -79,6 +83,7 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 #upload-status {
   width: 32px; height: 32px;
   display: none;
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
 }
 #upload-status.active { display: block; }
 
@@ -427,6 +432,7 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 <!-- Record button (floats above bar) -->
 <div id="rec-area">
   <div id="btn" role="button" tabindex="0">
+    <span class="rec-label">rec</span>
     <div class="stop-icon"></div>
   </div>
 </div>
@@ -448,21 +454,21 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
         <g class="mode-video"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/></g>
       </svg>
     </button>
-  </div>
-  <div class="bar-center"></div>
-  <div class="bar-right">
     <!-- Filter: clock icon -->
     <button id="filter-btn" class="bar-btn" onclick="toggleFilter()">
       <svg class="filter-today" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
       <svg class="filter-all" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
     </button>
+  </div>
+  <div class="bar-center"></div>
+  <div class="bar-right">
     <!-- Report: doc icon -->
     <button class="bar-btn" onclick="openReport()">
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
     </button>
-    <!-- Invite: envelope icon -->
+    <!-- Invite: person+ icon -->
     <button class="bar-btn" onclick="openInvite()">
-      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 4 12 13 2 4"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
     </button>
   </div>
 </div>
@@ -713,9 +719,9 @@ async function loadMembers() {
 }
 
 // ==================== MAP ====================
-const map = L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap', maxZoom: 19
+const map = L.map('map', { attributionControl: false, zoomControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  maxZoom: 20, subdomains: 'abcd'
 }).addTo(map);
 
 // ==================== PREVIEW / PLAYBACK ====================
@@ -1262,7 +1268,7 @@ function openReport() {
   const wardParam = selectedWard ? '?ward=' + encodeURIComponent(selectedWard) : '';
   authFetch('/api/report' + wardParam)
     .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
-    .then(data => { content.innerHTML = renderReport(data.report); })
+    .then(data => { content.innerHTML = renderReport(data.report) + '<p style="font-size:11px;opacity:0.4;margin-top:24px">Map data &copy; OpenStreetMap contributors &bull; Leaflet</p>'; })
     .catch(() => { content.textContent = 'Report unavailable — try again shortly.'; });
 }
 
