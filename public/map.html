@@ -580,19 +580,30 @@ function setSelectedWard(slug) {
   showWardBoundary(slug);
 }
 
+const boundaryCache = {}; // wardCode -> geojson data
+
 function showWardBoundary(slug) {
-  if (wardBoundaryLayer) { map.removeLayer(wardBoundaryLayer); wardBoundaryLayer = null; }
   const code = wardCodeMap[slug];
   if (!code) return;
-  const url = 'https://services1.arcgis.com/ESMARspQHYMw9BZ9/ArcGIS/rest/services/Wards_May_2024_Boundaries_UK_BSC/FeatureServer/0/query'
-    + '?where=' + encodeURIComponent("WD24CD='" + code + "'")
-    + '&outFields=WD24NM&f=geojson';
-  fetch(url).then(r => r.json()).then(data => {
-    if (!data.features || !data.features.length) return;
-    wardBoundaryLayer = L.geoJSON(data, {
-      style: { color: '#4285f4', weight: 2, opacity: 0.6, fill: false }
-    }).addTo(map);
-  }).catch(() => {});
+  if (wardBoundaryLayer) { map.removeLayer(wardBoundaryLayer); wardBoundaryLayer = null; }
+  if (boundaryCache[code]) {
+    drawBoundary(boundaryCache[code]);
+    return;
+  }
+  authFetch('/api/ward-boundary?code=' + encodeURIComponent(code))
+    .then(r => r.json()).then(data => {
+      if (!data.features || !data.features.length) return;
+      boundaryCache[code] = data;
+      if (slug === selectedWard) drawBoundary(data);
+    }).catch(() => {});
+}
+
+function drawBoundary(data) {
+  if (wardBoundaryLayer) { map.removeLayer(wardBoundaryLayer); wardBoundaryLayer = null; }
+  wardBoundaryLayer = L.geoJSON(data, {
+    style: { color: '#4285f4', weight: 2, opacity: 0.6, fill: false },
+    pane: 'boundary'
+  }).addTo(map);
 }
 
 function slugify(name) {
@@ -720,6 +731,8 @@ async function loadMembers() {
 
 // ==================== MAP ====================
 const map = L.map('map', { attributionControl: false, zoomControl: false });
+map.createPane('boundary');
+map.getPane('boundary').style.zIndex = 450;
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
   maxZoom: 20, subdomains: 'abcd'
 }).addTo(map);
@@ -1232,6 +1245,8 @@ function loadMarkers() {
       if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
       initialLoad = false;
     }
+    // Ensure boundary is visible (cached fetch is free)
+    if (selectedWard && !wardBoundaryLayer) showWardBoundary(selectedWard);
   });
 }
 

@@ -306,6 +306,27 @@ app.get('/api/ward-lookup', async (req, res) => {
   res.json({ ward: wardInfo.ward, wardCode: wardInfo.wardCode, slug: slugify(wardInfo.ward), district: wardInfo.district, constituency: wardInfo.constituency });
 });
 
+// ---- Ward boundary proxy ----
+const boundaryCache = {};
+app.get('/api/ward-boundary', (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).json({ error: 'code required' });
+  if (boundaryCache[code]) { log(`Boundary cache hit: ${code}`); return res.json(boundaryCache[code]); }
+  const url = `https://services1.arcgis.com/ESMARspQHYMw9BZ9/ArcGIS/rest/services/Wards_May_2024_Boundaries_UK_BSC/FeatureServer/0/query?where=${encodeURIComponent("WD24CD='" + code + "'")}&outFields=WD24NM&f=geojson`;
+  https.get(url, (upstream) => {
+    let data = '';
+    upstream.on('data', c => data += c);
+    upstream.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        if (json.features && json.features.length) boundaryCache[code] = json;
+        log(`Boundary fetched: ${code} (${json.features ? json.features.length : 0} features)`);
+        res.json(json);
+      } catch { res.status(500).json({ error: 'parse error' }); }
+    });
+  }).on('error', () => res.status(500).json({ error: 'fetch error' }));
+});
+
 // ---- Invite endpoint ----
 app.post('/api/invite', async (req, res) => {
   const token = req.headers['x-auth-token'];
