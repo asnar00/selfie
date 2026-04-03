@@ -21,6 +21,7 @@ const PORT = 8083;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const VERSION_PATH = path.join(__dirname, 'version.json');
 const USERS_PATH = path.join(__dirname, 'users.json');
+const CAMPAIGNS_PATH = path.join(__dirname, 'campaigns.json');
 
 // ---- Vonage SMS ----
 const vonage = new Vonage({
@@ -196,24 +197,49 @@ function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function addWardToUser(userName, wardName, wardCode) {
-  if (!userName || !wardName) return;
+// ---- Campaigns ----
+function getCampaigns() {
+  try { return JSON.parse(fs.readFileSync(CAMPAIGNS_PATH, 'utf8')); }
+  catch { return {}; }
+}
+
+function saveCampaigns(campaigns) {
+  fs.writeFileSync(CAMPAIGNS_PATH, JSON.stringify(campaigns, null, 2));
+}
+
+function addCampaignToUser(userName, campaignSlug) {
+  if (!userName || !campaignSlug) return;
   const users = getUsers();
   if (!users[userName]) return;
   const info = users[userName];
   const record = typeof info === 'string' ? { phone: info } : info;
-  if (!record.wards) record.wards = [];
-  if (!record.wardCodes) record.wardCodes = {};
-  if (wardCode) record.wardCodes[slugify(wardName)] = wardCode;
-  if (!record.wards.includes(wardName)) {
-    record.wards.push(wardName);
+  if (!record.campaigns) record.campaigns = [];
+  if (!record.campaigns.includes(campaignSlug)) {
+    record.campaigns.push(campaignSlug);
     users[userName] = record;
     saveUsers(users);
-    log(`Added ward "${wardName}" (${wardCode || 'no code'}) to user ${userName}`);
-  } else if (wardCode && !record.wardCodes[slugify(wardName)]) {
-    users[userName] = record;
-    saveUsers(users);
+    log(`Added campaign "${campaignSlug}" to user ${userName}`);
   }
+}
+
+function findCampaignForLocation(wardName, constituency, userCampaignSlugs) {
+  const campaigns = getCampaigns();
+  // Check constituency-level first (higher priority)
+  for (const slug of userCampaignSlugs) {
+    const c = campaigns[slug];
+    if (c && c.level === 'constituency' && c.constituency === constituency) return slug;
+  }
+  // Then ward-level
+  for (const slug of userCampaignSlugs) {
+    const c = campaigns[slug];
+    if (c && c.level === 'ward' && c.ward === wardName) return slug;
+  }
+  // Check all campaigns (not just user's) for a match
+  for (const [slug, c] of Object.entries(campaigns)) {
+    if (c.level === 'constituency' && c.constituency === constituency) return slug;
+    if (c.level === 'ward' && c.ward === wardName) return slug;
+  }
+  return null;
 }
 
 const storage = multer.diskStorage({
@@ -290,9 +316,10 @@ app.get('/api/auth/check', (req, res) => {
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
   const users = getUsers();
   const userRecord = users[user.name];
-  const wards = (userRecord && typeof userRecord === 'object' && userRecord.wards) || [];
-  const wardCodes = (userRecord && typeof userRecord === 'object' && userRecord.wardCodes) || {};
-  res.json({ ok: true, name: user.name, wards, wardCodes });
+  const campaignSlugs = (userRecord && typeof userRecord === 'object' && userRecord.campaigns) || [];
+  const allCampaigns = getCampaigns();
+  const campaigns = campaignSlugs.map(slug => ({ slug, ...allCampaigns[slug] })).filter(c => c.name);
+  res.json({ ok: true, name: user.name, campaigns });
 });
 
 app.get('/api/ward-lookup', async (req, res) => {
@@ -300,48 +327,138 @@ app.get('/api/ward-lookup', async (req, res) => {
   if (!lat || !lon) return res.status(400).json({ error: 'lat and lon required' });
   const wardInfo = await lookupWard(parseFloat(lat), parseFloat(lon));
   if (!wardInfo || !wardInfo.ward) return res.json({ ward: null });
-  // Add ward to authenticated user's list
-  const authUser = validateToken(req.headers['x-auth-token'] || req.query.token || parseCookie(req.headers.cookie, 'authToken'));
-  if (authUser && authUser.name) addWardToUser(authUser.name, wardInfo.ward, wardInfo.wardCode);
   res.json({ ward: wardInfo.ward, wardCode: wardInfo.wardCode, slug: slugify(wardInfo.ward), district: wardInfo.district, constituency: wardInfo.constituency });
 });
 
-// ---- Ward boundary proxy ----
+// ---- Boundary proxy ----
 const boundaryCache = {};
-app.get('/api/ward-boundary', (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.status(400).json({ error: 'code required' });
-  if (boundaryCache[code]) { log(`Boundary cache hit: ${code}`); return res.json(boundaryCache[code]); }
-  const url = `https://services1.arcgis.com/ESMARspQHYMw9BZ9/ArcGIS/rest/services/Wards_May_2024_Boundaries_UK_BSC/FeatureServer/0/query?where=${encodeURIComponent("WD24CD='" + code + "'")}&outFields=WD24NM&f=geojson`;
+
+function fetchONSBoundary(url, cacheKey, res) {
+  if (boundaryCache[cacheKey]) { log(`Boundary cache hit: ${cacheKey}`); return res.json(boundaryCache[cacheKey]); }
   https.get(url, (upstream) => {
     let data = '';
     upstream.on('data', c => data += c);
     upstream.on('end', () => {
       try {
         const json = JSON.parse(data);
-        if (json.features && json.features.length) boundaryCache[code] = json;
-        log(`Boundary fetched: ${code} (${json.features ? json.features.length : 0} features)`);
+        if (json.features && json.features.length) boundaryCache[cacheKey] = json;
+        log(`Boundary fetched: ${cacheKey} (${json.features ? json.features.length : 0} features)`);
         res.json(json);
       } catch { res.status(500).json({ error: 'parse error' }); }
     });
   }).on('error', () => res.status(500).json({ error: 'fetch error' }));
+}
+
+app.get('/api/ward-boundary', (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).json({ error: 'code required' });
+  const url = `https://services1.arcgis.com/ESMARspQHYMw9BZ9/ArcGIS/rest/services/Wards_May_2024_Boundaries_UK_BSC/FeatureServer/0/query?where=${encodeURIComponent("WD24CD='" + code + "'")}&outFields=WD24NM&f=geojson`;
+  fetchONSBoundary(url, 'ward:' + code, res);
 });
+
+app.get('/api/constituency-boundary', (req, res) => {
+  const { name } = req.query;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const url = `https://services1.arcgis.com/ESMARspQHYMw9BZ9/ArcGIS/rest/services/Westminster_Parliamentary_Constituencies_July_2024_Boundaries_UK_BSC/FeatureServer/0/query?where=${encodeURIComponent("PCON24NM='" + name + "'")}&outFields=PCON24NM&f=geojson`;
+  fetchONSBoundary(url, 'constituency:' + name, res);
+});
+
+// ---- Campaign endpoints ----
+app.get('/api/campaigns', (_req, res) => {
+  const campaigns = getCampaigns();
+  const result = Object.entries(campaigns).map(([slug, c]) => ({ slug, ...c }));
+  res.json(result);
+});
+
+app.post('/api/campaigns', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  const authUser = validateToken(token);
+  if (!authUser) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { name, level, ward, wardCode, district, constituency } = req.body;
+  if (!name || !level) return res.status(400).json({ error: 'name and level required' });
+  if (!['ward', 'constituency'].includes(level)) return res.status(400).json({ error: 'level must be ward or constituency' });
+
+  const slug = slugify(name);
+  const campaigns = getCampaigns();
+  const campaign = { name, level, district: district || null, constituency: constituency || null };
+  if (level === 'ward') { campaign.ward = ward || name; campaign.wardCode = wardCode || null; }
+  campaigns[slug] = campaign;
+
+  // Auto-merge: if constituency-level, absorb any ward campaigns in that constituency
+  if (level === 'constituency' && constituency) {
+    const wardDir = path.join(UPLOADS_DIR, slug);
+    fs.mkdirSync(wardDir, { recursive: true });
+    for (const [existingSlug, existing] of Object.entries(campaigns)) {
+      if (existingSlug === slug) continue;
+      if (existing.level === 'ward' && existing.constituency === constituency) {
+        mergeWardIntoCampaign(existingSlug, slug, campaigns);
+      }
+    }
+  }
+
+  saveCampaigns(campaigns);
+  addCampaignToUser(authUser.name, slug);
+  log(`Campaign created: "${name}" (${level}) by ${authUser.name}`);
+  res.json({ ok: true, slug, campaign: campaigns[slug] });
+});
+
+function mergeWardIntoCampaign(wardSlug, campaignSlug, campaigns) {
+  const srcDir = path.join(UPLOADS_DIR, wardSlug);
+  const dstDir = path.join(UPLOADS_DIR, campaignSlug);
+  if (!fs.existsSync(srcDir)) { delete campaigns[wardSlug]; return; }
+  fs.mkdirSync(dstDir, { recursive: true });
+
+  // Move all files
+  for (const f of fs.readdirSync(srcDir)) {
+    const src = path.join(srcDir, f);
+    const dst = path.join(dstDir, f);
+    fs.renameSync(src, dst);
+    // Update metadata paths
+    if (f.endsWith('.json') && f !== 'report.json') {
+      try {
+        const meta = JSON.parse(fs.readFileSync(dst, 'utf8'));
+        meta.campaign = campaignSlug;
+        if (meta.filename) meta.filename = meta.filename.replace(wardSlug + '/', campaignSlug + '/');
+        if (meta.thumbnail) meta.thumbnail = meta.thumbnail.replace(wardSlug + '/', campaignSlug + '/');
+        fs.writeFileSync(dst, JSON.stringify(meta, null, 2));
+      } catch {}
+    }
+  }
+  fs.rmdirSync(srcDir);
+  log(`Merged ward "${wardSlug}" into campaign "${campaignSlug}"`);
+
+  // Replace ward slug with campaign slug in all user records
+  const users = getUsers();
+  for (const [, info] of Object.entries(users)) {
+    if (typeof info !== 'object' || !info.campaigns) continue;
+    const idx = info.campaigns.indexOf(wardSlug);
+    if (idx !== -1) {
+      info.campaigns[idx] = campaignSlug;
+      // Deduplicate
+      info.campaigns = [...new Set(info.campaigns)];
+    }
+  }
+  saveUsers(users);
+
+  delete campaigns[wardSlug];
+}
 
 // ---- Invite endpoint ----
 app.post('/api/invite', async (req, res) => {
   const token = req.headers['x-auth-token'];
   if (!validateToken(token)) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { name, phone, ward } = req.body;
+  const { name, phone, campaign } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone required' });
 
   const norm = normalisePhone(phone);
   const users = getUsers();
   const newUser = { phone: norm };
-  if (ward) { newUser.wards = [ward]; }
+  if (campaign) { newUser.campaigns = [campaign]; }
   users[name] = newUser;
   saveUsers(users);
-  log(`User invited: ${name} (${norm})${ward ? ' ward: ' + ward : ''}`);
+  log(`User invited: ${name} (${norm})${campaign ? ' campaign: ' + campaign : ''}`);
 
   // Send SMS with login link (use friendly domain, not punycode)
   const loginUrl = `https://fieldnote.nøøb.org/@login?phone=${encodeURIComponent(phone)}`;
@@ -363,12 +480,12 @@ app.get('/api/users', (req, res) => {
   const token = req.headers['x-auth-token'];
   if (!validateToken(token)) return res.status(401).json({ error: 'Not authenticated' });
   const users = getUsers();
-  const ward = req.query.ward;
+  const campaign = req.query.campaign;
   const names = Object.keys(users).filter(name => {
-    if (!ward) return true;
+    if (!campaign) return true;
     const info = users[name];
-    const wards = (typeof info === 'object' && info.wards) || [];
-    return wards.some(w => slugify(w) === ward);
+    const campaigns = (typeof info === 'object' && info.campaigns) || [];
+    return campaigns.includes(campaign);
   });
   res.json(names);
 });
@@ -456,28 +573,32 @@ app.post('/upload', (req, res, next) => {
   const parsedLat = parseFloat(lat) || null;
   const parsedLon = parseFloat(lon) || null;
 
-  // Look up ward from GPS coordinates
+  // Look up location from GPS and find matching campaign
   const wardInfo = await lookupWard(parsedLat, parsedLon);
-  const wardSlug = wardInfo && wardInfo.ward ? slugify(wardInfo.ward) : null;
+  const userRecord = authUser ? getUsers()[authUser.name] : null;
+  const userCampaigns = (userRecord && userRecord.campaigns) || [];
+  const campaignSlug = wardInfo
+    ? findCampaignForLocation(wardInfo.ward, wardInfo.constituency, userCampaigns)
+    : null;
 
-  // Move file to ward subdirectory if we have a ward
+  // Move file to campaign subdirectory if we have a match
   let videoPath = req.file.path;
   let relativeFilename = req.file.filename;
-  if (wardSlug) {
-    const wardDir = path.join(UPLOADS_DIR, wardSlug);
-    fs.mkdirSync(wardDir, { recursive: true });
-    const newVideoPath = path.join(wardDir, req.file.filename);
+  if (campaignSlug) {
+    const campaignDir = path.join(UPLOADS_DIR, campaignSlug);
+    fs.mkdirSync(campaignDir, { recursive: true });
+    const newVideoPath = path.join(campaignDir, req.file.filename);
     fs.renameSync(videoPath, newVideoPath);
     videoPath = newVideoPath;
-    relativeFilename = path.join(wardSlug, req.file.filename);
-    log(`Ward lookup: ${wardInfo.ward} (${wardInfo.district}, ${wardInfo.constituency})`);
+    relativeFilename = path.join(campaignSlug, req.file.filename);
+    log(`Campaign match: ${campaignSlug} (ward: ${wardInfo.ward}, constituency: ${wardInfo.constituency})`);
   } else {
-    log(`No ward found for lat=${lat} lon=${lon}`);
+    log(`No campaign match for lat=${lat} lon=${lon}`);
   }
 
   const metaPath = videoPath.replace(/\.webm$/, '.json');
 
-  // Write metadata with ward info
+  // Write metadata — keep ward/district/constituency for drill-down
   fs.writeFileSync(metaPath, JSON.stringify({
     lat: parsedLat,
     lon: parsedLon,
@@ -487,15 +608,11 @@ app.post('/upload', (req, res, next) => {
     size: req.file.size,
     user: authUser ? authUser.name : null,
     ip: req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip,
+    campaign: campaignSlug,
     ward: wardInfo ? wardInfo.ward : null,
     district: wardInfo ? wardInfo.district : null,
     constituency: wardInfo ? wardInfo.constituency : null
   }, null, 2));
-
-  // Add ward to user's ward list
-  if (wardInfo && wardInfo.ward && authUser && authUser.name) {
-    addWardToUser(authUser.name, wardInfo.ward, wardInfo.wardCode);
-  }
 
   log(`Upload received: ${relativeFilename} (${(req.file.size/1024/1024).toFixed(1)}MB) lat=${lat} lon=${lon}`);
 
@@ -560,7 +677,7 @@ app.post('/upload', (req, res, next) => {
         fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
         log(`Transcribed ${relativeFilename}: "${text}"`);
         broadcast('new-upload', { filename: relativeFilename });
-        if (wardSlug) generateReport(wardSlug);
+        if (campaignSlug) generateReport(campaignSlug);
       } catch (e) {
         logErr(`Failed to parse transcription for ${relativeFilename}:`, e.message);
       }
@@ -588,29 +705,9 @@ app.use('/videos', express.static(UPLOADS_DIR));
 
 // API: list all uploads with metadata
 app.get('/api/uploads', (req, res) => {
-  const wardFilter = req.query.ward || null;
-  const entries = scanUploads(wardFilter);
+  const campaignFilter = req.query.campaign || null;
+  const entries = scanUploads(campaignFilter);
   res.json(entries.filter(e => e.lat != null && e.lon != null));
-});
-
-// API: list available wards
-app.get('/api/wards', (_req, res) => {
-  const wards = [];
-  try {
-    for (const d of fs.readdirSync(UPLOADS_DIR)) {
-      const full = path.join(UPLOADS_DIR, d);
-      if (!fs.statSync(full).isDirectory()) continue;
-      const jsonFiles = fs.readdirSync(full).filter(f => f.endsWith('.json') && f !== 'report.json');
-      if (jsonFiles.length === 0) continue;
-      try {
-        const meta = JSON.parse(fs.readFileSync(path.join(full, jsonFiles[0]), 'utf8'));
-        wards.push({ slug: d, name: meta.ward || d, district: meta.district || null, constituency: meta.constituency || null });
-      } catch {
-        wards.push({ slug: d, name: d });
-      }
-    }
-  } catch {}
-  res.json(wards);
 });
 
 // ---- Report generation ----
@@ -663,12 +760,12 @@ function findLatestSession(entries) {
 
 const reportGenerating = new Set();
 
-async function generateReport(wardSlug) {
-  if (!wardSlug) return;
-  if (reportGenerating.has(wardSlug)) return;
-  reportGenerating.add(wardSlug);
+async function generateReport(campaignSlug) {
+  if (!campaignSlug) return;
+  if (reportGenerating.has(campaignSlug)) return;
+  reportGenerating.add(campaignSlug);
   try {
-    const allEntries = getEntries(wardSlug);
+    const allEntries = getEntries(campaignSlug);
     if (!allEntries.length) return;
     const latestSession = findLatestSession(allEntries);
 
@@ -737,39 +834,39 @@ Report the following:
     });
 
     const report = message.content[0].text;
-    const reportPath = path.join(UPLOADS_DIR, wardSlug, 'report.json');
+    const reportPath = path.join(UPLOADS_DIR, campaignSlug, 'report.json');
     fs.writeFileSync(reportPath, JSON.stringify({
       report,
-      ward: wardSlug,
+      campaign: campaignSlug,
       generatedAt: new Date().toISOString(),
       entryCount: allEntries.length
     }, null, 2));
-    log(`Report generated for ward "${wardSlug}" (${allEntries.length} entries)`);
+    log(`Report generated for campaign "${campaignSlug}" (${allEntries.length} entries)`);
   } catch (e) {
-    logErr(`Report generation error (${wardSlug}):`, e.message);
+    logErr(`Report generation error (${campaignSlug}):`, e.message);
   } finally {
-    reportGenerating.delete(wardSlug);
+    reportGenerating.delete(campaignSlug);
   }
 }
 
 app.post('/api/report/generate', async (req, res) => {
-  const ward = req.query.ward;
-  if (!ward) return res.status(400).json({ error: 'ward query parameter required' });
-  await generateReport(ward);
+  const campaign = req.query.campaign;
+  if (!campaign) return res.status(400).json({ error: 'campaign query parameter required' });
+  await generateReport(campaign);
   res.json({ ok: true });
 });
 
 app.get('/api/report', (req, res) => {
-  const ward = req.query.ward;
-  if (!ward) return res.status(400).json({ error: 'ward query parameter required' });
-  const reportPath = path.join(UPLOADS_DIR, ward, 'report.json');
+  const campaign = req.query.campaign;
+  if (!campaign) return res.status(400).json({ error: 'campaign query parameter required' });
+  const reportPath = path.join(UPLOADS_DIR, campaign, 'report.json');
   if (fs.existsSync(reportPath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
       return res.json(cached);
     } catch {}
   }
-  res.json({ report: 'No report available yet for this ward. Record a note and a report will be generated automatically.' });
+  res.json({ report: 'No report available yet. Record a note and a report will be generated automatically.' });
 });
 
 // SSE for live updates
@@ -856,59 +953,4 @@ app.post('/@restart', (_req, res) => {
 
 const server = app.listen(PORT, () => {
   log(`Fieldnote server running on http://localhost:${PORT}`);
-  migrateExistingUploads();
 });
-
-// ---- One-time migration: move root-level uploads into per-ward folders ----
-async function migrateExistingUploads() {
-  const rootJsonFiles = fs.readdirSync(UPLOADS_DIR)
-    .filter(f => f.endsWith('.json') && !f.startsWith('pending-') && f !== 'report.json');
-  if (rootJsonFiles.length === 0) return;
-  log(`Migrating ${rootJsonFiles.length} existing uploads to per-ward folders...`);
-
-  for (const jsonFile of rootJsonFiles) {
-    const jsonPath = path.join(UPLOADS_DIR, jsonFile);
-    try {
-      const meta = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-      if (!meta.lat || !meta.lon) {
-        log(`  skip ${jsonFile}: no GPS coordinates`);
-        continue;
-      }
-
-      const wardInfo = await lookupWard(meta.lat, meta.lon);
-      if (!wardInfo || !wardInfo.ward) {
-        log(`  skip ${jsonFile}: ward lookup failed`);
-        continue;
-      }
-
-      const ward = slugify(wardInfo.ward);
-      const wardDir = path.join(UPLOADS_DIR, ward);
-      fs.mkdirSync(wardDir, { recursive: true });
-
-      // Move all associated files (.json, .webm, .jpg)
-      const baseName = jsonFile.replace(/\.json$/, '');
-      const extensions = ['.json', '.webm', '.jpg'];
-      for (const ext of extensions) {
-        const src = path.join(UPLOADS_DIR, baseName + ext);
-        const dst = path.join(wardDir, baseName + ext);
-        if (fs.existsSync(src)) fs.renameSync(src, dst);
-      }
-
-      // Update metadata with ward info and new relative paths
-      meta.ward = wardInfo.ward;
-      meta.district = wardInfo.district;
-      meta.constituency = wardInfo.constituency;
-      meta.filename = path.join(ward, baseName + '.webm');
-      if (meta.thumbnail) meta.thumbnail = path.join(ward, meta.thumbnail);
-
-      // Add ward to user record
-      if (meta.user) addWardToUser(meta.user, wardInfo.ward);
-
-      fs.writeFileSync(path.join(wardDir, jsonFile), JSON.stringify(meta, null, 2));
-      log(`  migrated ${baseName} → ${ward}/`);
-    } catch (e) {
-      logErr(`  migration error for ${jsonFile}:`, e.message);
-    }
-  }
-  log('Migration complete');
-}

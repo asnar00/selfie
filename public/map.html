@@ -139,21 +139,21 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
 #invite-overlay ul { list-style: none; padding: 0; }
 #invite-overlay li { padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
-/* ---- Ward picker overlay ---- */
-#ward-overlay {
+/* ---- Campaign picker overlay ---- */
+#campaign-overlay {
   display: none; position: fixed; inset: 0; z-index: 20000;
   background: rgb(252, 243, 234);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 60px 20px 40px; font: 15px/1.6 'Switzer', sans-serif; color: #222;
 }
-#ward-overlay.active { display: block; }
-#ward-overlay .close-btn {
+#campaign-overlay.active { display: block; }
+#campaign-overlay .close-btn {
   position: fixed; top: max(12px, env(safe-area-inset-top, 12px)); right: 12px; z-index: 20001;
   padding: 6px 14px; border-radius: 12px; border: none;
   background: rgba(255, 192, 128, 0.85); color: #000;
   font: 600 13px/1 'Switzer', sans-serif; cursor: pointer; box-shadow: 0 0 0 1px #000;
 }
-#ward-overlay h1 { font-size: 20px; margin-bottom: 16px; }
+#campaign-overlay h1 { font-size: 20px; margin-bottom: 16px; }
 .ward-option {
   display: block; width: 100%; padding: 14px 16px; margin-bottom: 8px;
   border-radius: 12px; border: 2px solid #000;
@@ -298,8 +298,8 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   background: #1a5ab8;
 }
 
-/* ---- Ward lozenge (top left) ---- */
-#ward-lozenge {
+/* ---- Campaign lozenge (top left) ---- */
+#campaign-lozenge {
   display: none; position: fixed;
   top: max(12px, env(safe-area-inset-top, 12px));
   left: 50%; transform: translateX(-50%);
@@ -312,9 +312,9 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   color: #fff;
   -webkit-tap-highlight-color: transparent;
 }
-#ward-lozenge.show { display: flex; }
-#ward-lozenge.tappable { cursor: pointer; }
-#ward-name {
+#campaign-lozenge.show { display: flex; }
+#campaign-lozenge.tappable { cursor: pointer; }
+#campaign-name {
   padding: 0 12px;
   white-space: nowrap;
 }
@@ -369,11 +369,27 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   <button class="close-btn" onclick="closeInvite()">close</button>
   <h1>Invite</h1>
   <div id="invite-form">
-    <select id="invite-ward" style="display:block;width:100%;padding:12px 14px;border-radius:10px;border:2px solid #000;background:rgba(255,255,255,0.5);font:400 16px 'Switzer',sans-serif;outline:none;margin-bottom:10px;-webkit-appearance:none"></select>
+    <select id="invite-campaign" style="display:block;width:100%;padding:12px 14px;border-radius:10px;border:2px solid #000;background:rgba(255,255,255,0.5);font:400 16px 'Switzer',sans-serif;outline:none;margin-bottom:10px;-webkit-appearance:none"></select>
     <input id="invite-name" type="text" placeholder="Name">
     <input id="invite-phone" type="tel" placeholder="Phone number">
     <button class="invite-send" onclick="sendInvite()">add &amp; show QR</button>
     <div id="invite-error" style="color:#c00;font-size:14px;margin-top:8px;display:none"></div>
+  </div>
+  <div id="new-campaign-panel" style="display:none;margin-bottom:16px">
+    <h2 style="font-size:16px;margin-bottom:10px">New Campaign</h2>
+    <div id="new-campaign-gps" style="display:none">
+      <button class="invite-send" id="new-campaign-ward" style="margin-bottom:8px" onclick="createFromGPS('ward')"></button>
+      <button class="invite-send" id="new-campaign-constituency" style="margin-bottom:8px" onclick="createFromGPS('constituency')"></button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input id="new-campaign-postcode" type="text" placeholder="Or enter a postcode" style="flex:1">
+      <button class="invite-send" style="width:auto;padding:12px 16px" onclick="lookupPostcode()">Look up</button>
+    </div>
+    <div id="new-campaign-postcode-result" style="display:none;margin-top:10px">
+      <button class="invite-send" id="postcode-ward-btn" style="margin-bottom:8px"></button>
+      <button class="invite-send" id="postcode-constituency-btn" style="margin-bottom:8px"></button>
+    </div>
+    <button style="margin-top:8px;border:none;background:none;font:400 14px 'Switzer',sans-serif;color:#666;cursor:pointer;text-decoration:underline" onclick="cancelNewCampaign()">cancel</button>
   </div>
   <div id="invite-qr" style="display:none;text-align:center;margin-top:24px">
     <p id="invite-qr-name" style="font-size:18px;margin-bottom:16px"></p>
@@ -387,16 +403,16 @@ html, body { height: 100%; width: 100%; background: #000; overflow: hidden; -web
   </div>
 </div>
 
-<!-- Ward picker overlay -->
-<div id="ward-overlay">
-  <button class="close-btn" onclick="closeWardPicker()">close</button>
-  <h1>Select Ward</h1>
-  <div id="ward-list"></div>
+<!-- Campaign picker overlay -->
+<div id="campaign-overlay">
+  <button class="close-btn" onclick="closeCampaignPicker()">close</button>
+  <h1>Select Campaign</h1>
+  <div id="campaign-list"></div>
 </div>
 
-<!-- Ward lozenge -->
-<div id="ward-lozenge">
-  <span id="ward-name"></span>
+<!-- Campaign lozenge -->
+<div id="campaign-lozenge">
+  <span id="campaign-name"></span>
 </div>
 
 <!-- Version badge -->
@@ -520,90 +536,127 @@ function authFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
-// ==================== WARD SELECTION ====================
-let selectedWard = localStorage.getItem('selectedWard') || null;
-let userWards = [];
+// ==================== CAMPAIGN SELECTION ====================
+let selectedCampaign = localStorage.getItem('selectedCampaign') || localStorage.getItem('selectedWard') || null;
+let userCampaigns = []; // array of { slug, name, level, wardCode, ... }
 
-function initWardSelection() {
+function initCampaignSelection() {
   authFetch('/api/auth/check').then(r => r.json()).then(data => {
     if (!data.ok) return;
     if (data.name) localStorage.setItem('userName', data.name);
-    userWards = data.wards || [];
-    Object.assign(wardCodeMap, data.wardCodes || {});
-    if (userWards.length > 0) {
-      if (!selectedWard || !userWards.some(w => slugify(w) === selectedWard)) {
-        selectedWard = slugify(userWards[0]);
+    userCampaigns = data.campaigns || [];
+    if (userCampaigns.length > 0) {
+      if (!selectedCampaign || !userCampaigns.some(c => c.slug === selectedCampaign)) {
+        selectedCampaign = userCampaigns[0].slug;
       }
-      setSelectedWard(selectedWard);
-    } else {
-      resolveWardFromGPS();
+      setSelectedCampaign(selectedCampaign);
     }
-    // Lozenge is always tappable
-    const lozenge = document.getElementById('ward-lozenge');
-    lozenge.classList.add('tappable');
-    lozenge.onclick = onWardTap;
+    // Lozenge is always tappable if multiple campaigns
+    const lozenge = document.getElementById('campaign-lozenge');
+    if (userCampaigns.length > 1) {
+      lozenge.classList.add('tappable');
+      lozenge.onclick = openCampaignPicker;
+    }
   }).catch(() => {});
 }
 
-let currentGPSWard = null; // { ward, slug, wardCode } from latest GPS position
-let wardBoundaryLayer = null;
-let wardCodeMap = {}; // slug -> wardCode
+let currentGPSLocation = null; // { ward, slug, wardCode, constituency, district }
+let campaignBoundaryLayer = null;
 
-function resolveWardFromGPS() {
+function resolveGPSLocation() {
   if (!geoPos) return;
   authFetch(`/api/ward-lookup?lat=${geoPos.latitude}&lon=${geoPos.longitude}`)
     .then(r => r.json())
     .then(data => {
       if (!data.ward) return;
-      currentGPSWard = data;
-      if (data.wardCode) {
-        const isNew = !wardCodeMap[data.slug];
-        wardCodeMap[data.slug] = data.wardCode;
-        if (isNew && data.slug === selectedWard) showWardBoundary(selectedWard);
-      }
-      addWardIfNew(data.ward);
-      if (!selectedWard) setSelectedWard(data.slug);
+      currentGPSLocation = data;
     })
     .catch(() => {});
 }
 
-function addWardIfNew(wardName) {
-  if (!userWards.includes(wardName)) {
-    userWards.push(wardName);
+function setSelectedCampaign(slug) {
+  selectedCampaign = slug;
+  localStorage.setItem('selectedCampaign', slug);
+  localStorage.removeItem('selectedWard');
+  const campaign = userCampaigns.find(c => c.slug === slug);
+  document.getElementById('campaign-name').textContent = campaign ? campaign.name : slug;
+  document.getElementById('campaign-lozenge').classList.add('show');
+  showCampaignBoundary(slug);
+}
+
+const boundaryCache = {};
+let currentWardLayer = null;
+
+function showCampaignBoundary(slug) {
+  clearBoundaryLayers();
+  const campaign = userCampaigns.find(c => c.slug === slug);
+  if (!campaign) return;
+
+  if (campaign.level === 'constituency') {
+    fetchConstituencyBoundary(campaign.constituency, slug);
+  } else {
+    if (!campaign.wardCode) return;
+    fetchWardBoundary(campaign.wardCode, slug);
   }
 }
 
-function setSelectedWard(slug) {
-  selectedWard = slug;
-  localStorage.setItem('selectedWard', slug);
-  const wardName = userWards.find(w => slugify(w) === slug) || slug;
-  document.getElementById('ward-name').textContent = wardName;
-  document.getElementById('ward-lozenge').classList.add('show');
-  showWardBoundary(slug);
-}
-
-const boundaryCache = {}; // wardCode -> geojson data
-
-function showWardBoundary(slug) {
-  const code = wardCodeMap[slug];
-  if (!code) return;
-  if (wardBoundaryLayer) { map.removeLayer(wardBoundaryLayer); wardBoundaryLayer = null; }
-  if (boundaryCache[code]) {
-    drawBoundary(boundaryCache[code]);
-    return;
-  }
+function fetchWardBoundary(code, slug) {
+  const key = 'ward:' + code;
+  if (boundaryCache[key]) { drawMainBoundary(boundaryCache[key]); return; }
   authFetch('/api/ward-boundary?code=' + encodeURIComponent(code))
     .then(r => r.json()).then(data => {
       if (!data.features || !data.features.length) return;
-      boundaryCache[code] = data;
-      if (slug === selectedWard) drawBoundary(data);
+      boundaryCache[key] = data;
+      if (slug === selectedCampaign) drawMainBoundary(data);
     }).catch(() => {});
 }
 
-function drawBoundary(data) {
-  if (wardBoundaryLayer) { map.removeLayer(wardBoundaryLayer); wardBoundaryLayer = null; }
-  wardBoundaryLayer = L.geoJSON(data, {
+function fetchConstituencyBoundary(name, slug) {
+  const key = 'constituency:' + name;
+  if (boundaryCache[key]) { drawMainBoundary(boundaryCache[key]); return; }
+  authFetch('/api/constituency-boundary?name=' + encodeURIComponent(name))
+    .then(r => r.json()).then(data => {
+      if (!data.features || !data.features.length) return;
+      boundaryCache[key] = data;
+      if (slug === selectedCampaign) drawMainBoundary(data);
+    }).catch(() => {});
+}
+
+function showWardHighlightForLocation(lat, lon) {
+  if (currentWardLayer) { map.removeLayer(currentWardLayer); currentWardLayer = null; }
+  const campaign = userCampaigns.find(c => c.slug === selectedCampaign);
+  if (!campaign || campaign.level !== 'constituency') return;
+  authFetch(`/api/ward-lookup?lat=${lat}&lon=${lon}`)
+    .then(r => r.json()).then(data => {
+      if (!data.wardCode) return;
+      const key = 'ward:' + data.wardCode;
+      if (boundaryCache[key]) { drawWardHighlight(boundaryCache[key]); return; }
+      authFetch('/api/ward-boundary?code=' + encodeURIComponent(data.wardCode))
+        .then(r => r.json()).then(geo => {
+          if (!geo.features || !geo.features.length) return;
+          boundaryCache[key] = geo;
+          drawWardHighlight(geo);
+        }).catch(() => {});
+    }).catch(() => {});
+}
+
+function clearBoundaryLayers() {
+  if (campaignBoundaryLayer) { map.removeLayer(campaignBoundaryLayer); campaignBoundaryLayer = null; }
+  if (currentWardLayer) { map.removeLayer(currentWardLayer); currentWardLayer = null; }
+}
+
+function drawMainBoundary(data) {
+  if (campaignBoundaryLayer) { map.removeLayer(campaignBoundaryLayer); campaignBoundaryLayer = null; }
+  campaignBoundaryLayer = L.geoJSON(data, {
     style: { color: '#4285f4', weight: 2, opacity: 0.6, fill: false },
+    pane: 'boundary'
+  }).addTo(map);
+}
+
+function drawWardHighlight(data) {
+  if (currentWardLayer) { map.removeLayer(currentWardLayer); currentWardLayer = null; }
+  currentWardLayer = L.geoJSON(data, {
+    style: { color: '#4285f4', weight: 1, opacity: 0.3, fill: true, fillColor: '#4285f4', fillOpacity: 0.08 },
     pane: 'boundary'
   }).addTo(map);
 }
@@ -612,28 +665,17 @@ function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function onWardTap() {
-  if (currentGPSWard) addWardIfNew(currentGPSWard.ward);
-  if (userWards.length > 1) {
-    openWardPicker();
-  } else if (userWards.length === 1) {
-    setSelectedWard(slugify(userWards[0]));
-    reloadMarkers();
-  }
-}
-
-function openWardPicker() {
-  const overlay = document.getElementById('ward-overlay');
-  const list = document.getElementById('ward-list');
+function openCampaignPicker() {
+  const overlay = document.getElementById('campaign-overlay');
+  const list = document.getElementById('campaign-list');
   list.innerHTML = '';
-  userWards.forEach(wardName => {
-    const slug = slugify(wardName);
+  userCampaigns.forEach(campaign => {
     const btn = document.createElement('button');
-    btn.className = 'ward-option' + (slug === selectedWard ? ' selected' : '');
-    btn.innerHTML = wardName;
+    btn.className = 'ward-option' + (campaign.slug === selectedCampaign ? ' selected' : '');
+    btn.innerHTML = campaign.name;
     btn.onclick = () => {
-      setSelectedWard(slug);
-      closeWardPicker();
+      setSelectedCampaign(campaign.slug);
+      closeCampaignPicker();
       reloadMarkers();
     };
     list.appendChild(btn);
@@ -641,8 +683,8 @@ function openWardPicker() {
   overlay.classList.add('active');
 }
 
-function closeWardPicker() {
-  document.getElementById('ward-overlay').classList.remove('active');
+function closeCampaignPicker() {
+  document.getElementById('campaign-overlay').classList.remove('active');
 }
 
 function reloadMarkers() {
@@ -655,8 +697,8 @@ function reloadMarkers() {
   loadMarkers();
 }
 
-// Init ward selection on page load
-initWardSelection();
+// Init campaign selection on page load
+initCampaignSelection();
 
 // ==================== QR CODE GENERATOR ====================
 function generateQR(canvas, text) {
@@ -681,19 +723,103 @@ function openInvite() {
   document.getElementById('invite-overlay').classList.add('active');
   document.getElementById('invite-qr').style.display = 'none';
   document.getElementById('invite-error').style.display = 'none';
-  populateInviteWards();
+  populateInviteCampaigns();
   loadMembers();
 }
 
-function populateInviteWards() {
-  const select = document.getElementById('invite-ward');
-  const allWards = [...userWards];
-  if (currentGPSWard && !allWards.includes(currentGPSWard.ward)) allWards.push(currentGPSWard.ward);
-  select.innerHTML = allWards.map(w => {
-    const slug = slugify(w);
-    return `<option value="${slug}"${slug === selectedWard ? ' selected' : ''}>${w}</option>`;
-  }).join('');
-  select.onchange = () => loadMembers();
+function populateInviteCampaigns() {
+  const select = document.getElementById('invite-campaign');
+  select.innerHTML = userCampaigns.map(c =>
+    `<option value="${c.slug}"${c.slug === selectedCampaign ? ' selected' : ''}>${c.name}</option>`
+  ).join('') + '<option value="__new__">New campaign...</option>';
+  select.onchange = () => {
+    if (select.value === '__new__') { startNewCampaign(); return; }
+    loadMembers();
+  };
+}
+
+let pendingLocation = null; // location data for campaign creation
+
+function startNewCampaign() {
+  const panel = document.getElementById('new-campaign-panel');
+  const gpsDiv = document.getElementById('new-campaign-gps');
+  const postcodeResult = document.getElementById('new-campaign-postcode-result');
+  document.getElementById('new-campaign-postcode').value = '';
+  postcodeResult.style.display = 'none';
+  panel.style.display = '';
+
+  // Show GPS options if we have a location
+  if (currentGPSLocation) {
+    pendingLocation = currentGPSLocation;
+    document.getElementById('new-campaign-ward').textContent = 'Ward: ' + currentGPSLocation.ward;
+    document.getElementById('new-campaign-constituency').textContent = 'Constituency: ' + currentGPSLocation.constituency;
+    gpsDiv.style.display = '';
+  } else {
+    gpsDiv.style.display = 'none';
+  }
+}
+
+function cancelNewCampaign() {
+  document.getElementById('new-campaign-panel').style.display = 'none';
+  document.getElementById('invite-campaign').value = selectedCampaign;
+}
+
+async function createFromGPS(level) {
+  const loc = pendingLocation;
+  if (!loc) return;
+  if (level === 'ward') {
+    await createCampaign({ name: loc.ward, level: 'ward', ward: loc.ward, wardCode: loc.wardCode, district: loc.district, constituency: loc.constituency });
+  } else {
+    await createCampaign({ name: loc.constituency, level: 'constituency', district: loc.district, constituency: loc.constituency });
+  }
+  document.getElementById('new-campaign-panel').style.display = 'none';
+}
+
+async function lookupPostcode() {
+  const postcode = document.getElementById('new-campaign-postcode').value.trim();
+  if (!postcode) return;
+  try {
+    const r = await fetch('https://api.postcodes.io/postcodes/' + encodeURIComponent(postcode));
+    const data = await r.json();
+    if (data.status !== 200 || !data.result) { alert('Postcode not found'); return; }
+    const loc = data.result;
+    pendingLocation = {
+      ward: loc.admin_ward, wardCode: loc.codes.admin_ward,
+      district: loc.admin_district, constituency: loc.parliamentary_constituency
+    };
+    const result = document.getElementById('new-campaign-postcode-result');
+    document.getElementById('postcode-ward-btn').textContent = 'Ward: ' + loc.admin_ward;
+    document.getElementById('postcode-ward-btn').onclick = () => createFromPostcode('ward');
+    document.getElementById('postcode-constituency-btn').textContent = 'Constituency: ' + loc.parliamentary_constituency;
+    document.getElementById('postcode-constituency-btn').onclick = () => createFromPostcode('constituency');
+    result.style.display = '';
+  } catch { alert('Postcode lookup failed'); }
+}
+
+async function createFromPostcode(level) {
+  await createFromGPS(level);
+}
+
+async function createCampaign(params) {
+  try {
+    const r = await authFetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(params)
+    });
+    const data = await r.json();
+    if (!r.ok) { alert(data.error); return; }
+    // Refresh campaigns and select the new one
+    const checkR = await authFetch('/api/auth/check');
+    const checkData = await checkR.json();
+    userCampaigns = checkData.campaigns || [];
+    setSelectedCampaign(data.slug);
+    populateInviteCampaigns();
+    loadMembers();
+    reloadMarkers();
+  } catch (e) {
+    alert('Failed to create campaign');
+  }
 }
 
 function closeInvite() {
@@ -703,8 +829,7 @@ function closeInvite() {
 async function sendInvite() {
   const name = document.getElementById('invite-name').value.trim();
   const phone = document.getElementById('invite-phone').value.trim();
-  const wardSlug = document.getElementById('invite-ward').value;
-  const wardName = [...document.getElementById('invite-ward').options].find(o => o.value === wardSlug)?.textContent || '';
+  const campaignSlug = document.getElementById('invite-campaign').value;
   const err = document.getElementById('invite-error');
   if (!name || !phone) { err.textContent = 'Enter name and phone'; err.style.display = ''; return; }
   err.style.display = 'none';
@@ -713,7 +838,7 @@ async function sendInvite() {
     const r = await authFetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ name, phone, ward: wardName })
+      body: JSON.stringify({ name, phone, campaign: campaignSlug })
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error; err.style.display = ''; return; }
@@ -738,8 +863,8 @@ async function sendInvite() {
 
 async function loadMembers() {
   try {
-    const ward = document.getElementById('invite-ward').value;
-    const r = await authFetch('/api/users' + (ward ? '?ward=' + encodeURIComponent(ward) : ''));
+    const campaign = document.getElementById('invite-campaign').value;
+    const r = await authFetch('/api/users' + (campaign ? '?campaign=' + encodeURIComponent(campaign) : ''));
     const names = await r.json();
     const ul = document.getElementById('invite-members');
     ul.innerHTML = names.map(n => `<li>${n}</li>`).join('');
@@ -800,6 +925,7 @@ function closePreview() {
   if (currentMarkerEl) currentMarkerEl.classList.remove('selected');
   currentEntry = null;
   currentMarkerEl = null;
+  if (currentWardLayer) { map.removeLayer(currentWardLayer); currentWardLayer = null; }
 }
 
 function showPreview(entry, markerEl) {
@@ -822,6 +948,7 @@ function showPreview(entry, markerEl) {
     cardThumb.src = '/videos/' + entry.thumbnail;
   }
   previewCard.classList.add('active');
+  if (entry.lat && entry.lon) showWardHighlightForLocation(entry.lat, entry.lon);
 }
 
 function openPlayer(entry) {
@@ -890,9 +1017,9 @@ function initGeo() {
     { enableHighAccuracy: true, maximumAge: 60000 });
   navigator.geolocation.getCurrentPosition(p => {
     if (!geoPos) geoPos = p.coords;
-    resolveWardFromGPS();
+    resolveGPSLocation();
   }, () => {}, { enableHighAccuracy: false, maximumAge: Infinity, timeout: 0 });
-  setInterval(resolveWardFromGPS, 60000);
+  setInterval(resolveGPSLocation, 60000);
 }
 
 async function initCamera() {
@@ -1210,63 +1337,87 @@ function isToday(timestamp) {
   return new Date(timestamp).toDateString() === new Date().toDateString();
 }
 
-function locKey(entry) {
-  return (Math.round(entry.lat * 10000) / 10000) + ',' + (Math.round(entry.lon * 10000) / 10000);
+const CLUSTER_PX = 30; // pixels — dots closer than this merge into one group
+let lastEntries = [];
+
+function pixelKey(entry) {
+  const pt = map.latLngToContainerPoint([entry.lat, entry.lon]);
+  const gx = Math.floor(pt.x / CLUSTER_PX);
+  const gy = Math.floor(pt.y / CLUSTER_PX);
+  return gx + ',' + gy;
+}
+
+function groupEntries(entries) {
+  const groups = {};
+  entries.forEach(entry => {
+    const key = pixelKey(entry);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+  });
+  return groups;
+}
+
+function findGroupForEntry(entry) {
+  const key = pixelKey(entry);
+  for (const gkey in markerGroups) {
+    if (gkey === key) return gkey;
+  }
+  return null;
+}
+
+function rebuildMarkers() {
+  const entries = lastEntries;
+  if (!entries.length && !meMarker && initialLoad) { map.setView([51.5, -0.13], 13); return; }
+
+  const newGroups = groupEntries(entries);
+
+  for (const key in markerGroups) {
+    map.removeLayer(markerGroups[key].marker);
+    delete markerGroups[key];
+  }
+
+  for (const key in newGroups) {
+    const groupEntries = newGroups[key];
+    const first = groupEntries[0];
+    const marker = L.marker([first.lat, first.lon], { icon: DotIcon }).addTo(map);
+    const group = { marker, entries: groupEntries, index: 0 };
+    markerGroups[key] = group;
+    marker.on('click', () => {
+      const currentKey = currentEntry ? findGroupForEntry(currentEntry) : null;
+      if (currentKey === key) {
+        group.index = (group.index + 1) % group.entries.length;
+      } else { group.index = 0; }
+      showPreview(group.entries[group.index], marker.getElement());
+    });
+  }
 }
 
 function loadMarkers() {
-  const wardParam = selectedWard ? '?ward=' + encodeURIComponent(selectedWard) : '';
-  authFetch('/api/uploads' + wardParam).then(r => r.json()).then(rawEntries => {
+  const campaignParam = selectedCampaign ? '?campaign=' + encodeURIComponent(selectedCampaign) : '';
+  authFetch('/api/uploads' + campaignParam).then(r => r.json()).then(rawEntries => {
     const entries = filterMode === 'today'
       ? rawEntries.filter(e => isToday(e.timestamp))
       : rawEntries;
-
-    if (!entries.length && !meMarker && initialLoad) { map.setView([51.5, -0.13], 13); return; }
 
     const seen = new Set();
     entries.forEach(e => { allEntries[e.filename] = e; seen.add(e.filename); });
     for (const key in allEntries) { if (!seen.has(key)) delete allEntries[key]; }
 
-    const newGroups = {};
-    entries.forEach(entry => {
-      const key = locKey(entry);
-      if (!newGroups[key]) newGroups[key] = [];
-      newGroups[key].push(entry);
-    });
-
-    for (const key in markerGroups) {
-      if (!newGroups[key]) { map.removeLayer(markerGroups[key].marker); delete markerGroups[key]; }
-    }
-
-    for (const key in newGroups) {
-      const groupEntries = newGroups[key];
-      if (markerGroups[key]) {
-        markerGroups[key].entries = groupEntries;
-        if (markerGroups[key].index >= groupEntries.length) markerGroups[key].index = 0;
-      } else {
-        const first = groupEntries[0];
-        const marker = L.marker([first.lat, first.lon], { icon: DotIcon }).addTo(map);
-        const group = { marker, entries: groupEntries, index: 0 };
-        markerGroups[key] = group;
-        marker.on('click', () => {
-          if (currentEntry && locKey(currentEntry) === key) {
-            group.index = (group.index + 1) % group.entries.length;
-          } else { group.index = 0; }
-          showPreview(group.entries[group.index], marker.getElement());
-        });
-      }
-    }
+    lastEntries = entries;
+    rebuildMarkers();
 
     if (initialLoad) {
       const bounds = entries.map(e => [e.lat, e.lon]);
       if (meMarker) bounds.push(meMarker.getLatLng());
       if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
       initialLoad = false;
+      rebuildMarkers(); // regroup after fitBounds changes zoom
     }
-    // Ensure boundary is visible (cached fetch is free)
-    if (selectedWard && !wardBoundaryLayer) showWardBoundary(selectedWard);
+    if (selectedCampaign && !campaignBoundaryLayer) showCampaignBoundary(selectedCampaign);
   });
 }
+
+map.on('zoomend', () => { if (lastEntries.length) rebuildMarkers(); });
 
 loadMarkers();
 setInterval(loadMarkers, 15000);
@@ -1294,12 +1445,13 @@ function renderReport(md) {
 function openReport() {
   const overlay = document.getElementById('report-overlay');
   const content = document.getElementById('report-content');
-  const wardName = userWards.find(w => slugify(w) === selectedWard) || selectedWard || '';
-  document.getElementById('report-title').textContent = wardName ? wardName + ' Canvassing Report' : 'Canvassing Report';
+  const campaign = userCampaigns.find(c => c.slug === selectedCampaign);
+  const campaignName = campaign ? campaign.name : selectedCampaign || '';
+  document.getElementById('report-title').textContent = campaignName ? campaignName + ' Canvassing Report' : 'Canvassing Report';
   content.textContent = '';
   overlay.classList.add('active');
-  const wardParam = selectedWard ? '?ward=' + encodeURIComponent(selectedWard) : '';
-  authFetch('/api/report' + wardParam)
+  const campaignParam = selectedCampaign ? '?campaign=' + encodeURIComponent(selectedCampaign) : '';
+  authFetch('/api/report' + campaignParam)
     .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
     .then(data => { content.innerHTML = renderReport(data.report) + '<p style="font-size:11px;opacity:0.4;margin-top:24px">Map data &copy; OpenStreetMap contributors &bull; Leaflet</p>'; })
     .catch(() => { content.textContent = 'Report unavailable — try again shortly.'; });
